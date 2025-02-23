@@ -67,6 +67,13 @@ func main() {
 
 	totalUsedBlock := map[string]int{}
 
+	// Parallel
+	var wg sync.WaitGroup
+	var wgCurrentCount = 0
+	var wgTotalRoutine = 0
+	var wgSession = make(chan struct{}, objectCalcParallel)
+	var mu sync.Mutex
+
 	switch generateSource {
 	case Object:
 		obj_start := time.Now()
@@ -86,12 +93,6 @@ func main() {
 		currentTexture := ""
 		// command
 		command := []string{}
-		// Parallel
-		var wg sync.WaitGroup
-		var wgCurrentCount = 0
-		var wgTotalRoutine = 0
-		var wgSession = make(chan struct{}, objectCalcParallel)
-		var mu sync.Mutex
 
 		for ln, line := range strings.Split(string(obj), "\n") {
 			cmd := strings.SplitN(line, " ", 2)
