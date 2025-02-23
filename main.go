@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math"
-	"math/big"
 	"os"
 	"path/filepath"
 	"slices"
@@ -46,7 +45,7 @@ func main() {
 
 	// object/polygon
 	polygonVectors := [][3]Frac{}
-	face := big.NewInt(0)
+	var face int64 = 0
 	min := [3]float64{}
 	max := [3]float64{}
 	// texture/mtl
@@ -170,7 +169,7 @@ func main() {
 
 				prefix := fmt.Sprintf("Face L%d: %s", ln, line)
 				fmt.Printf("% -60s Step:%f Now:%s\n    ABC:%s,%s,%s\n", prefix, step.Float(), time.Since(obj_start), polygonPa, polygonPb, polygonPc)
-				face = new(big.Int).Add(face, big.NewInt(1))
+				face++
 				commands = append(commands, removeDupe(generateCmds)...)
 			}
 		default:
@@ -184,7 +183,7 @@ func main() {
 	_, n := CommandToMCfunction(commands, "", chain)
 	fmt.Printf("create function duration: %s\n", time.Since(create_start))
 
-	fmt.Printf("\n\nDuration: %s, Point:%d Face:%s Cmd:%d\n", time.Since(start), len(polygonVectors), face.String(), n)
+	fmt.Printf("\n\nDuration: %s, Point:%d Face:%d Cmd:%d\n", time.Since(start), len(polygonVectors), face, n)
 	fmt.Printf("Min:[%.2f,%.2f,%.2f] Max:[%.2f,%.2f,%.2f] H:%.2f W:%.2f D:%.2f\n", min[0], min[1], min[2], max[0], max[1], max[2], max[0]-min[0], max[1]-min[1], max[2]-min[2])
 
 	type Count struct {
