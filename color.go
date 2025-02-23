@@ -2,7 +2,7 @@ package main
 
 import (
 	"math"
-	"sort"
+	"slices"
 )
 
 func nearestColorBlock(target Color, blocks map[string]Color) (blockID string) {
@@ -31,9 +31,26 @@ func nearestColorBlock(target Color, blocks map[string]Color) (blockID string) {
 		})
 
 	}
-	sort.Slice(distance, func(i, j int) bool {
-		return distance[i].d < distance[j].d
+
+	slices.SortFunc(distance, func(a, b Distance) int {
+		// Sort by distance
+		if a.d < b.d {
+			return -1
+		}
+		if a.d > b.d {
+			return 1
+		}
+		// Sort by blockID (dictionary sort)
+		if a.blockID < b.blockID {
+			return -1
+		}
+		if a.blockID > b.blockID {
+			return 1
+		}
+
+		return 0
 	})
+
 	return distance[0].blockID
 }
 
