@@ -321,13 +321,6 @@ func main() {
 }
 
 func removeDupe(in []string) []string {
-	results := []string{}
-	encountered := map[string]struct{}{}
-	for _, v := range in {
-		if _, ok := encountered[v]; !ok {
-			encountered[v] = struct{}{}
-			results = append(results, v)
-		}
-	}
-	return results
+	slices.Sort(in)
+	return slices.Compact(in)
 }
