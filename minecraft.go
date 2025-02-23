@@ -7,14 +7,13 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io/fs"
-	"math"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 )
 
+// 0..255 RGB color
 type Color struct {
 	r, g, b int
 }
@@ -149,87 +148,6 @@ func blockFilter(blockModelList map[string]string) (blockColor map[string]Color)
 
 	fmt.Printf("All sides are same& name filtered block: %d\n", len(blockColor))
 	return
-}
-
-func nearestColorBlock(target Color, blocks map[string]Color) (blockID string) {
-	type Distance struct {
-		blockID string
-		d       float64
-	}
-	distance := []Distance{}
-	for blockID, color := range blocks {
-		Ha, Sa, La := RGBToHSL(uint8(color.r), uint8(color.g), uint8(color.b))
-		Hc, Sb, Lb := RGBToHSL(uint8(target.r), uint8(target.g), uint8(target.b))
-
-		// r := math.Pow(float64(target.r-color.r), 2)
-		// g := math.Pow(float64(target.g-color.g), 2)
-		// b := math.Pow(float64(target.b-color.b), 2)
-		distance = append(distance, Distance{
-			blockID: blockID,
-			d:       HSLDistance(Ha, Sa, La, Hc, Sb, Lb),
-		})
-	}
-	sort.Slice(distance, func(i, j int) bool {
-		return distance[i].d < distance[j].d
-	})
-	return distance[0].blockID
-}
-
-func RGBToHSL(r, g, b uint8) (h, s, l float64) {
-	// 0-255 の RGB 値を 0-1 の範囲に正規化
-	fr := float64(r) / 255.0
-	fg := float64(g) / 255.0
-	fb := float64(b) / 255.0
-
-	// 最大値・最小値を求める
-	max := math.Max(math.Max(fr, fg), fb)
-	min := math.Min(math.Min(fr, fg), fb)
-
-	// 輝度 (Lightness)
-	l = (max + min) / 2.0
-
-	// 彩度 (Saturation)
-	if max == min {
-		s = 0 // グレースケール
-		h = 0 // H は任意の値（通常 0）
-	} else {
-		delta := max - min
-		if l > 0.5 {
-			s = delta / (2.0 - max - min)
-		} else {
-			s = delta / (max + min)
-		}
-
-		// 色相 (Hue) の計算
-		switch max {
-		case fr:
-			h = (fg - fb) / delta
-			if fg < fb {
-				h += 6
-			}
-		case fg:
-			h = (fb-fr)/delta + 2
-		case fb:
-			h = (fr-fg)/delta + 4
-		}
-
-		h *= 60 // 角度に変換
-	}
-
-	return h, s, l
-}
-
-func HSLDistance(h1, s1, l1, h2, s2, l2 float64) float64 {
-	// 色相 (H) の円環距離を考慮
-	dh := math.Abs(h1 - h2)
-	if dh > 180 {
-		dh = 360 - dh
-	}
-
-	// ユークリッド距離計算
-	ds := s1 - s2
-	dl := l1 - l2
-	return math.Sqrt(dh*dh*0.001 + ds*ds + dl*dl)
 }
 
 func CommandToMCfunction(commands []string, filePrefix string, maxChain int) (funcs []string, count int) {
