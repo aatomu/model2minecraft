@@ -18,23 +18,24 @@ import (
 // Configuration Area
 var (
 	// output config
-	generateSource Source  = Video
+	generateSource Source  = Object
 	chain          int     = 700000
 	generator      Command = func(rgb Color, x, y, z float64, blockId string) (cmd string) {
-		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId)
+		// return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId)
+		return fmt.Sprintf("particle dust{color:[%ff,%ff,%ff],scale:0.2f} ~%.2f ~%.2f ~%.2f 0 0 0 0 1 force @a", float64(rgb.r)/255, float64(rgb.g)/255, float64(rgb.b)/255, x, y, z)
 	}
-	isCountBlock bool = true
+	isCountBlock bool = false
 	// object config
 	objectRoot    = "./3d"
 	objectFile    = "HatsuneMiku.obj"
-	objectScale   = NewFrac(9, 5)
-	objectSpacing = NewFrac(1, 1)
+	objectScale   = NewFrac(1, 100)
+	objectSpacing = NewFrac(5, 100)
 	// example.png
 	imageFile = "../develop/assets/cbw32.png"
 	// video.mp4 *ffmpeg required
 	videoFile      = "./minecraft/example.mp4"
-	frameRate  int = 5
-	videoScale     = "128:-1" // ffmpeg rescale argument
+	frameRate  int = 20
+	videoScale     = "200:-1" // ffmpeg rescale argument
 	// minecraft config
 	minecraftRoot = "./minecraft"
 	acceptBlockId = []string{""}                                                    //allowed regexp
