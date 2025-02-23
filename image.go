@@ -2,7 +2,7 @@ package main
 
 import (
 	"image"
-	"os"
+	"io"
 )
 
 type pixel struct {
@@ -10,13 +10,7 @@ type pixel struct {
 	x, y float64
 }
 
-func parseImage(path string) (p []pixel) {
-	f, err := os.Open(path)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
+func parseImage(f io.Reader) (p []pixel) {
 	img, _, _ := image.Decode(f)
 	bounds := img.Bounds()
 

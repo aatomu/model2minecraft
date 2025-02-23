@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
@@ -18,7 +19,7 @@ import (
 // Configuration Area
 var (
 	// output config
-	generateSource Source  = Object
+	generateSource Source  = Video
 	chain          int     = 700000
 	generator      Command = func(rgb Color, x, y, z float64, blockId string) (cmd string) {
 		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId)
@@ -186,7 +187,14 @@ func main() {
 		command := []string{}
 
 		var W, H float64
-		for _, p := range parseImage(imageFile) {
+
+		f, err := os.Open(imageFile)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+
+		for _, p := range parseImage(f) {
 			blockId := nearestColorBlock(p.c, blockColor)
 
 			command = append(command, generator(p.c, p.x, p.y, 0.0, blockId))
@@ -223,25 +231,58 @@ func main() {
 		fmt.Printf("\nFrame to function start...\n")
 		var W, H float64
 		var frame = 0
+		var frameData = map[int][]string{}
 		for current := 0.0; current < duration; current += 1.0 / float64(frameRate) {
 			frame++
-			fmt.Printf("Now: %5.2f/%5.2f, F: %d\n", current, duration, frame)
-			exec.Command("ffmpeg", "-y", "-ss", fmt.Sprintf("%.3f", current), "-i", videoFile, "-frames:v", "1", "-vf", "scale="+videoScale, "./temp.png").Run()
 
-			// command
-			command := []string{}
+			wgSession <- struct{}{}
+			wg.Add(1)
+			wgTotalRoutine++
+			wgCurrentCount++
 
-			for _, p := range parseImage("./temp.png") {
-				blockId := nearestColorBlock(p.c, blockColor)
+			go func(fCurrent, fDuration float64, fFrame int) {
+				defer func() {
+					<-wgSession
+					wg.Done()
+					wgCurrentCount--
+				}()
 
-				command = append(command, generator(p.c, p.x, p.y, 0.0, blockId))
-				W = math.Max(W, p.x)
-				H = math.Max(H, p.y)
-				totalUsedBlock[blockId] = totalUsedBlock[blockId] + 1
-			}
+				fmt.Printf("Start: frame: %d(%5.2f/%5.2f)\n", fFrame, fCurrent, fDuration)
+				execute := exec.Command("ffmpeg", "-i", videoFile, "-ss", fmt.Sprintf("%.3f", fCurrent), "-frames:v", "1", "-vf", "scale="+videoScale, "-f", "image2pipe", "-vcodec", "png", "pipe:1")
 
-			generatedCommand = append(generatedCommand, command)
+				var buf bytes.Buffer
+				execute.Stdout = &buf
+				execute.Run()
+
+				// command
+				command := []string{}
+				usedBlocks := map[string]int{}
+
+				for _, p := range parseImage(&buf) {
+					blockId := nearestColorBlock(p.c, blockColor)
+
+					command = append(command, generator(p.c, p.x, p.y, 0.0, blockId))
+
+					W = math.Max(W, p.x)
+					H = math.Max(H, p.y)
+					usedBlocks[blockId] = usedBlocks[blockId] + 1
+				}
+
+				mu.Lock()
+				frameData[fFrame] = command
+				for id, count := range usedBlocks {
+					totalUsedBlock[id] = totalUsedBlock[id] + count
+				}
+				mu.Unlock()
+
+				fmt.Printf("Finish: frame: %d(%5.2f/%5.2f) Parallel(running/total):%d/%d\n", fFrame, fCurrent, fDuration, wgCurrentCount, wgTotalRoutine)
+			}(current, duration, frame)
 		}
+		wg.Wait()
+		for i := 1; i < len(frameData); i++ {
+			generatedCommand = append(generatedCommand, frameData[i])
+		}
+
 		fmt.Printf("\nFrame to function duration: %s\n", time.Since(video_start))
 
 		fmt.Printf("\nDuration: %s, Frame: %d, W: %d, H: %d,\n", time.Since(start), len(generatedCommand), int(W), int(H))
