@@ -53,9 +53,9 @@ func parseMtl(fileName string) map[string][][]Color {
 					for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 						r, g, b, _ := img.At(x, y).RGBA()
 						yColors = append(yColors, Color{
-							r: int(r >> 8),
-							g: int(g >> 8),
-							b: int(b >> 8),
+							r: uint8(r >> 8),
+							g: uint8(g >> 8),
+							b: uint8(b >> 8),
 						})
 					}
 					colorMap = append(colorMap, yColors)
