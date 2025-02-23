@@ -26,10 +26,11 @@ var (
 	}
 	isCountBlock bool = false
 	// object config
-	objectRoot    = "./3d"
-	objectFile    = "HatsuneMiku.obj"
-	objectScale   = NewFrac(9, 5)
-	objectSpacing = NewFrac(1, 1)
+	objectRoot         = "./3d"
+	objectFile         = "HatsuneMiku.obj"
+	objectScale        = NewFrac(9, 5)
+	objectSpacing      = NewFrac(1, 1)
+	objectCalcParallel = 500
 	// example.png
 	imageFile = "../develop/assets/cbw32.png"
 	// video.mp4 *ffmpeg required
@@ -86,6 +87,8 @@ func main() {
 		command := []string{}
 		// Parallel
 		var wg sync.WaitGroup
+		var wgCount = 0
+		var wgSession = make(chan struct{}, objectCalcParallel)
 		var mu sync.Mutex
 
 		for ln, line := range strings.Split(string(obj), "\n") {
@@ -123,13 +126,26 @@ func main() {
 				}
 			case "f": // Object surface/polygon
 				{
+					indexes := strings.Split(data, " ")
+					if len(indexes) < 3 {
+						fmt.Printf("Skip L%d: %s\n", ln, line)
+						return
+					}
+
+					wgSession <- struct{}{}
 					wg.Add(1)
-					go func(data string, ln int, polygonVectors [][3]Frac, textureVectors [][2]Frac, texture [][]Color, blockColor map[string]Color, obj_start time.Time) {
-						defer wg.Done()
-						ok, Rmin, Rmax, commands, usedBlocks := calcSurface(data, ln, polygonVectors, textureVectors, texture, blockColor, obj_start)
-						if !ok {
-							return
-						}
+					wgCount++
+					go func(fLn int, fData string, fIndexes []string, fPolygonVectors [][3]Frac, fTextureVectors [][2]Frac, fTexture [][]Color, fBlockColor map[string]Color, fObj_start time.Time) {
+						defer func() {
+							<-wgSession
+							wg.Done()
+							wgCount--
+						}()
+
+						step, Rmin, Rmax, commands, usedBlocks := calcSurface(fIndexes, fPolygonVectors, fTextureVectors, fTexture, fBlockColor)
+
+						prefix := fmt.Sprintf("Face L%d: f %s", fLn, fData)
+						fmt.Printf("% -60s Step:%f Now:%s Parallel:%d\n", prefix, step.Float(), time.Since(fObj_start), wgCount)
 
 						mu.Lock()
 						min[0] = math.Min(min[0], Rmin[0])
@@ -144,7 +160,7 @@ func main() {
 						}
 						face++
 						mu.Unlock()
-					}(data, ln, polygonVectors, textureVectors, material[currentTexture], blockColor, obj_start)
+					}(ln, data, indexes, polygonVectors, textureVectors, material[currentTexture], blockColor, obj_start)
 				}
 			default:
 				fmt.Printf("Skip L%d: %s\n", ln, line)

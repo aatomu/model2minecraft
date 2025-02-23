@@ -1,12 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 func getStep(Pa, Pb, Pc [3]Frac, spacing Frac) (step Frac) {
@@ -136,13 +134,7 @@ func calcDistance(Xa, Ya, Za, Xb, Yb, Zb Frac) Frac {
 	return Xab.Add(Yab).Add(Zab).Sqrt()
 }
 
-func calcSurface(data string, ln int, polygonVectors [][3]Frac, textureVectors [][2]Frac, texture [][]Color, blockColor map[string]Color, obj_start time.Time) (ok bool, min [3]float64, max [3]float64, commands []string, usedBlock map[string]int) {
-	indexes := strings.Split(data, " ")
-	if len(indexes) < 3 {
-		fmt.Printf("Skip L%d: f %s\n", ln, data)
-		return
-	}
-
+func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2]Frac, texture [][]Color, blockColor map[string]Color) (step Frac, min [3]float64, max [3]float64, commands []string, usedBlock map[string]int) {
 	// Get surface polygon top
 	polygonPaIndex, _ := strconv.Atoi(strings.Split(indexes[0], "/")[0])
 	polygonPbIndex, _ := strconv.Atoi(strings.Split(indexes[1], "/")[0])
@@ -182,7 +174,7 @@ func calcSurface(data string, ln int, polygonVectors [][3]Frac, textureVectors [
 		}
 	}
 
-	step := getStep(polygonPa, polygonPb, polygonPc, objectSpacing)
+	step = getStep(polygonPa, polygonPb, polygonPc, objectSpacing)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	var polygonPoints [][3]Frac
@@ -224,10 +216,7 @@ func calcSurface(data string, ln int, polygonVectors [][3]Frac, textureVectors [
 		usedBlock[blockId] = usedBlock[blockId] + 1
 	}
 
-	prefix := fmt.Sprintf("Face L%d: f %s", ln, data)
-	fmt.Printf("% -60s Step:%f Now:%s\n    ABC:%s,%s,%s\n", prefix, step.Float(), time.Since(obj_start), polygonPa, polygonPb, polygonPc)
 	commands = removeDupe(commands)
 
-	ok = true
 	return
 }
