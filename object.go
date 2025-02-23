@@ -127,26 +127,3 @@ func getTexturePoints(step Frac, Pa, Pb, Pc [2]Frac) (points [][2]Frac) {
 
 	return
 }
-
-// func getPoints(step Frac, Pa, Pb, Pc [3]Frac, spacing Frac) (cmd []string) {
-// 	var lambdaA, lambdaB, lambdaC Frac
-// 	generateCmds := []string{}
-
-// 	lambdaA = NewFrac(0, 1)
-// 	for lambdaA.Float() <= 1 {
-// 		lambdaB = NewFrac(0, 1)
-// 		for lambdaA.Add(lambdaB).Float() <= 1 {
-// 			lambdaC = NewFrac(1, 1).Sub(lambdaA).Sub(lambdaB)
-// 			x := Pa[0].Mul(lambdaA).Add(Pb[0].Mul(lambdaB)).Add(Pc[0].Mul(lambdaC))
-// 			y := Pa[1].Mul(lambdaA).Add(Pb[1].Mul(lambdaB)).Add(Pc[1].Mul(lambdaC))
-// 			z := Pa[2].Mul(lambdaA).Add(Pb[2].Mul(lambdaB)).Add(Pc[2].Mul(lambdaC))
-
-// 			lambdaB = lambdaB.Add(step)
-
-// 			generateCmds = append(generateCmds, fmt.Sprintf(command, math.Round(x.Div(spacing).Float())*spacing.Float(), math.Round(y.Div(spacing).Float())*spacing.Float(), math.Round(z.Div(spacing).Float())*spacing.Float()))
-// 		}
-// 		lambdaA = lambdaA.Add(step)
-// 	}
-
-// 	return generateCmds
-// }
