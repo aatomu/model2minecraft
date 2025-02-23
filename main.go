@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ import (
 
 var (
 	// output config
-	scale   = NewFrac(9, 5)
+	scale   = NewFrac(5, 5)
 	spacing = NewFrac(1, 1)
 	// command            = "particle dust{color:[0f,0f,0f],scale:1f} ~%.2f ~%.2f ~%.2f 0 0 0 0 1 force @a"
 	chain int = 700000
@@ -23,8 +24,8 @@ var (
 	objectFile = "HatsuneMiku.obj"
 	// minecraft config
 	minecraftRoot = "./minecraft"
-	acceptBlockId = []string{""} //allowed regexp
-	ignoreBlockId = []string{}   //allowed regexp
+	acceptBlockId = []string{""}                                             //allowed regexp
+	ignoreBlockId = []string{"powder", "sand", "gravel", "glass", "spawner"} //allowed regexp
 )
 
 func main() {
@@ -54,6 +55,7 @@ func main() {
 	// texture/mtl
 	textureVectors := [][2]Frac{}
 	currentTexture := ""
+	useBlocks := map[string]int{}
 
 	for ln, line := range strings.Split(string(obj), "\n") {
 		cmd := strings.SplitN(line, " ", 2)
@@ -148,20 +150,20 @@ func main() {
 
 					texturePoint := texturePoints[i]
 					// -1..1 => -width..width
-					textureX := int(texturePoint[0].Float() * float64(len(material[currentTexture])))
+					textureX := int(texturePoint[0].Mod(NewFrac(1, 1)).Float() * float64(len(material[currentTexture])))
 					if textureX < 0 {
 						textureX = len(material[currentTexture]) + textureX
 					}
 					// -1..1 => -height..height
-					textureY := int(texturePoint[1].Float())
+					textureY := int(texturePoint[1].Mod(NewFrac(1, 1)).Float())
 					if textureY < 0 {
 						textureY = len(material[currentTexture][textureX]) + textureY
 					}
-					log.Println("Point:", texturePoint, textureX, textureY)
 					textureColor := material[currentTexture][textureX][textureY]
 					blockId := nearestColorBlock(textureColor, blockColor)
 
 					generateCmds = append(generateCmds, fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId))
+					useBlocks[blockId] = useBlocks[blockId] + 1
 				}
 
 				prefix := fmt.Sprintf("Face L%d: %s", ln, line)
@@ -182,6 +184,25 @@ func main() {
 
 	fmt.Printf("\n\nDuration: %s, Point:%d Face:%s Cmd:%d\n", time.Since(start), len(polygonVectors), face.String(), n)
 	fmt.Printf("Min:[%.2f,%.2f,%.2f] Max:[%.2f,%.2f,%.2f] H:%.2f W:%.2f D:%.2f\n", min[0], min[1], min[2], max[0], max[1], max[2], max[0]-min[0], max[1]-min[1], max[2]-min[2])
+
+	type Count struct {
+		BlockID string `json:"blockID"`
+		Count   int    `json:"count"`
+	}
+	var blockCount []Count
+	for blockID, count := range useBlocks {
+		blockCount = append(blockCount, Count{
+			BlockID: blockID,
+			Count:   count,
+		})
+	}
+
+	slices.SortFunc(blockCount, func(a, b Count) int {
+		return b.Count - a.Count // 降順にソート
+	})
+	for i, v := range blockCount {
+		fmt.Printf("% 4d: %-5s %d\n", i+1, v.BlockID, v.Count)
+	}
 }
 
 func removeDupe(in []string) []string {

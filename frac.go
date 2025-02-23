@@ -87,6 +87,19 @@ func (f Frac) Div(n Frac) (ans Frac) {
 	return
 }
 
+func (f Frac) Mod(n Frac) (ans Frac) {
+	top := new(big.Int).Mod(new(big.Int).Mul(f.Top, n.Bottom), new(big.Int).Mul(f.Bottom, n.Top))
+	bottom := new(big.Int).Mul(f.Bottom, n.Bottom)
+
+	ans = Frac{
+		Top:    top,
+		Bottom: bottom,
+	}
+
+	ans.approx()
+	return
+}
+
 func (f Frac) Pow(n int64) (ans Frac) {
 	if n < 0 {
 		return Frac{Top: f.Bottom, Bottom: f.Top}.Pow(-n)

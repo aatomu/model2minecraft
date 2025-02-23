@@ -16,7 +16,7 @@ import (
 )
 
 type Color struct {
-	r, g, b int
+	r, g, b uint8
 }
 
 func scanBlockModel() (blockModelList map[string]string) {
@@ -135,9 +135,9 @@ func blockFilter(blockModelList map[string]string) (blockColor map[string]Color)
 			}
 
 			blockColor[blockID] = Color{
-				r: red / pixel,
-				g: green / pixel,
-				b: blue / pixel,
+				r: uint8(red / pixel),
+				g: uint8(green / pixel),
+				b: uint8(blue / pixel),
 			}
 		}
 	}
