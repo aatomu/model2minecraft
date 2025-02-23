@@ -24,10 +24,10 @@ var (
 	}
 	isCountBlock bool = true
 	// object config
-	objectRoot = "./3d"
-	objectFile = "HatsuneMiku.obj"
-	scale      = NewFrac(9, 5)
-	spacing    = NewFrac(1, 1)
+	objectRoot    = "./3d"
+	objectFile    = "HatsuneMiku.obj"
+	objectScale   = NewFrac(9, 5)
+	objectSpacing = NewFrac(1, 1)
 	// example.png
 	imageFile = "../develop/assets/cbw32.png"
 	// video.mp4 *ffmpeg required
@@ -100,7 +100,7 @@ func main() {
 				{
 					var x, y, z float64
 					fmt.Sscanf(data, "%f %f %f", &x, &y, &z)
-					polygonVectors = append(polygonVectors, [3]Frac{Float2Frac(x).Mul(scale), Float2Frac(y).Mul(scale), Float2Frac(z).Mul(scale)})
+					polygonVectors = append(polygonVectors, [3]Frac{Float2Frac(x).Mul(objectScale), Float2Frac(y).Mul(objectScale), Float2Frac(z).Mul(objectScale)})
 					fmt.Printf("PolygonVector L%d: %s\n", ln, line)
 				}
 			case "vt": // Texture top
@@ -162,16 +162,16 @@ func main() {
 						}
 					}
 
-					step := getStep(polygonPa, polygonPb, polygonPc, spacing)
+					step := getStep(polygonPa, polygonPb, polygonPc, objectSpacing)
 					polygonPoints := getPolygonPoints(step, polygonPa, polygonPb, polygonPc)
 					texturePoints := getTexturePoints(step, texturePa, texturePb, texturePc)
 
 					var generateCmds []string
 					for i := 0; i < len(polygonPoints); i++ {
 						polygonPoint := polygonPoints[i]
-						x := math.Round(polygonPoint[0].Div(spacing).Float()) * spacing.Float()
-						y := math.Round(polygonPoint[1].Div(spacing).Float()) * spacing.Float()
-						z := math.Round(polygonPoint[2].Div(spacing).Float()) * spacing.Float()
+						x := math.Round(polygonPoint[0].Div(objectSpacing).Float()) * objectSpacing.Float()
+						y := math.Round(polygonPoint[1].Div(objectSpacing).Float()) * objectSpacing.Float()
+						z := math.Round(polygonPoint[2].Div(objectSpacing).Float()) * objectSpacing.Float()
 
 						// Image position mapping
 						//  Golang:   | Obj:
