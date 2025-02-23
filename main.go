@@ -53,8 +53,6 @@ func main() {
 	currentTexture := ""
 	useBlocks := map[string]int{}
 
-	colors := []string{}
-
 	for ln, line := range strings.Split(string(obj), "\n") {
 		cmd := strings.SplitN(line, " ", 2)
 		if len(cmd) < 2 {
@@ -161,7 +159,6 @@ func main() {
 					textureIndexY := int(textureY * float64(len(material[currentTexture][textureIndexX])))
 					textureColor := material[currentTexture][textureIndexX][textureIndexY]
 					blockId := nearestColorBlock(textureColor, blockColor)
-					colors = append(colors, fmt.Sprintf("target: 0x%02X%02X%02X block: 0x%02X%02X%02X B:%s \n", textureColor.r, textureColor.g, textureColor.b, blockColor[blockId].r, blockColor[blockId].g, blockColor[blockId].b, blockId))
 
 					generateCmds = append(generateCmds, fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId))
 					useBlocks[blockId] = useBlocks[blockId] + 1
@@ -203,12 +200,6 @@ func main() {
 	})
 	for i, v := range blockCount {
 		fmt.Printf("% 4d: %-5s %d 0x%02X%02X%02X\n", i+1, v.BlockID, v.Count, blockColor[v.BlockID].r, blockColor[v.BlockID].g, blockColor[v.BlockID].b)
-	}
-
-	fmt.Println(strings.Repeat("\n", 20))
-	fmt.Println(strings.Join(removeDupe(colors), "\n"))
-	for id, c := range blockColor {
-		fmt.Printf("id:%s color:0x%02X%02X%02X\n", id, c.r, c.g, c.b)
 	}
 }
 
