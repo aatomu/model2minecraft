@@ -13,9 +13,11 @@ import (
 
 var (
 	// output config
-	scale   = NewFrac(9, 5)
-	spacing = NewFrac(1, 1)
-	// command            = "particle dust{color:[0f,0f,0f],scale:1f} ~%.2f ~%.2f ~%.2f 0 0 0 0 1 force @a"
+	scale             = NewFrac(9, 5)
+	spacing           = NewFrac(1, 1)
+	generator Command = func(rgb Color, x, y, z float64, blockId string) string {
+		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId)
+	}
 	chain int = 700000
 	// object config
 	objectRoot = "./3d"
@@ -160,7 +162,7 @@ func main() {
 					textureColor := material[currentTexture][textureIndexX][textureIndexY]
 					blockId := nearestColorBlock(textureColor, blockColor)
 
-					generateCmds = append(generateCmds, fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId))
+					generateCmds = append(generateCmds, generator(textureColor, x, y, z, blockId))
 					useBlocks[blockId] = useBlocks[blockId] + 1
 				}
 

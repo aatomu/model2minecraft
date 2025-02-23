@@ -13,6 +13,8 @@ import (
 	"strings"
 )
 
+type Command func(rgb Color, x, y, z float64, blockId string) string
+
 // 0..255 RGB color
 type Color struct {
 	r, g, b int
