@@ -146,18 +146,18 @@ func main() {
 							wgCurrentCount--
 						}()
 
-						step, Rmin, Rmax, commands, usedBlocks := calcSurface(fIndexes, fPolygonVectors, fTextureVectors, fTexture, fBlockColor)
+						step, surfaceMin, surfaceMax, commands, usedBlocks := calcSurface(fIndexes, fPolygonVectors, fTextureVectors, fTexture, fBlockColor)
 
 						prefix := fmt.Sprintf("Face L%d: f %s", fLn, fData)
 						fmt.Printf("% -60s Step:%f Now:%s Parallel(running/total):%d/%d\n", prefix, step.Float(), time.Since(fObj_start), wgCurrentCount, wgTotalRoutine)
 
 						mu.Lock()
-						min[0] = math.Min(min[0], Rmin[0])
-						min[1] = math.Min(min[1], Rmin[1])
-						min[2] = math.Min(min[2], Rmin[2])
-						max[0] = math.Max(max[0], Rmax[0])
-						max[1] = math.Max(max[1], Rmax[1])
-						max[2] = math.Max(max[2], Rmax[2])
+						min[0] = math.Min(min[0], surfaceMin[0])
+						min[1] = math.Min(min[1], surfaceMin[1])
+						min[2] = math.Min(min[2], surfaceMin[2])
+						max[0] = math.Max(max[0], surfaceMax[0])
+						max[1] = math.Max(max[1], surfaceMax[1])
+						max[2] = math.Max(max[2], surfaceMax[2])
 						command = append(command, commands...)
 						for id, count := range usedBlocks {
 							totalUsedBlock[id] = totalUsedBlock[id] + count
