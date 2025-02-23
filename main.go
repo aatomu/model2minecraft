@@ -88,7 +88,8 @@ func main() {
 		command := []string{}
 		// Parallel
 		var wg sync.WaitGroup
-		var wgCount = 0
+		var wgCurrentCount = 0
+		var wgTotalRoutine = 0
 		var wgSession = make(chan struct{}, objectCalcParallel)
 		var mu sync.Mutex
 
@@ -135,18 +136,20 @@ func main() {
 
 					wgSession <- struct{}{}
 					wg.Add(1)
-					wgCount++
+					wgTotalRoutine++
+					wgCurrentCount++
 					go func(fLn int, fData string, fIndexes []string, fPolygonVectors [][3]Frac, fTextureVectors [][2]Frac, fTexture [][]Color, fBlockColor map[string]Color, fObj_start time.Time) {
+
 						defer func() {
 							<-wgSession
 							wg.Done()
-							wgCount--
+							wgCurrentCount--
 						}()
 
 						step, Rmin, Rmax, commands, usedBlocks := calcSurface(fIndexes, fPolygonVectors, fTextureVectors, fTexture, fBlockColor)
 
 						prefix := fmt.Sprintf("Face L%d: f %s", fLn, fData)
-						fmt.Printf("% -60s Step:%f Now:%s Parallel:%d\n", prefix, step.Float(), time.Since(fObj_start), wgCount)
+						fmt.Printf("% -60s Step:%f Now:%s Parallel(running/total):%d/%d\n", prefix, step.Float(), time.Since(fObj_start), wgCurrentCount, wgTotalRoutine)
 
 						mu.Lock()
 						min[0] = math.Min(min[0], Rmin[0])
