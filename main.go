@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -63,7 +63,7 @@ func main() {
 	// [index][]command:string{}
 	generatedCommand := [][]string{}
 
-	usedBlock := map[string]int{}
+	totalUsedBlock := map[string]int{}
 
 	switch generateSource {
 	case Object:
@@ -84,6 +84,9 @@ func main() {
 		currentTexture := ""
 		// command
 		command := []string{}
+		// Parallel
+		var wg sync.WaitGroup
+		var mu sync.Mutex
 
 		for ln, line := range strings.Split(string(obj), "\n") {
 			cmd := strings.SplitN(line, " ", 2)
@@ -120,91 +123,33 @@ func main() {
 				}
 			case "f": // Object surface/polygon
 				{
-					indexes := strings.Split(data, " ")
-					if len(indexes) < 3 {
-						fmt.Printf("Skip L%d: %s\n", ln, line)
-						continue
-					}
-
-					// Get surface polygon top
-					polygonPaIndex, _ := strconv.Atoi(strings.Split(indexes[0], "/")[0])
-					polygonPbIndex, _ := strconv.Atoi(strings.Split(indexes[1], "/")[0])
-					polygonPcIndex, _ := strconv.Atoi(strings.Split(indexes[2], "/")[0])
-					polygonPa := polygonVectors[polygonPaIndex-1]
-					polygonPb := polygonVectors[polygonPbIndex-1]
-					polygonPc := polygonVectors[polygonPcIndex-1]
-					// Get texture polygon top
-					texturePaIndex, _ := strconv.Atoi(strings.Split(indexes[0], "/")[1])
-					texturePbIndex, _ := strconv.Atoi(strings.Split(indexes[1], "/")[1])
-					texturePcIndex, _ := strconv.Atoi(strings.Split(indexes[2], "/")[1])
-					texturePa := textureVectors[texturePaIndex-1]
-					texturePb := textureVectors[texturePbIndex-1]
-					texturePc := textureVectors[texturePcIndex-1]
-
-					// Get min,max polygon top
-					for i := 0; i < 3; i++ {
-						// min
-						if min[i] > polygonPa[i].Float() {
-							min[i] = polygonPa[i].Float()
+					wg.Add(1)
+					go func(data string, ln int, polygonVectors [][3]Frac, textureVectors [][2]Frac, texture [][]Color, blockColor map[string]Color, obj_start time.Time) {
+						defer wg.Done()
+						ok, Rmin, Rmax, commands, usedBlocks := calcSurface(data, ln, polygonVectors, textureVectors, texture, blockColor, obj_start)
+						if !ok {
+							return
 						}
-						if min[i] > polygonPb[i].Float() {
-							min[i] = polygonPb[i].Float()
+
+						mu.Lock()
+						min[0] = math.Min(min[0], Rmin[0])
+						min[1] = math.Min(min[1], Rmin[1])
+						min[2] = math.Min(min[2], Rmin[2])
+						max[0] = math.Max(max[0], Rmax[0])
+						max[1] = math.Max(max[1], Rmax[1])
+						max[2] = math.Max(max[2], Rmax[2])
+						command = append(command, commands...)
+						for id, count := range usedBlocks {
+							totalUsedBlock[id] = totalUsedBlock[id] + count
 						}
-						if min[i] > polygonPc[i].Float() {
-							min[i] = polygonPc[i].Float()
-						}
-						// max
-						if max[i] < polygonPa[i].Float() {
-							max[i] = polygonPa[i].Float()
-						}
-						if max[i] < polygonPb[i].Float() {
-							max[i] = polygonPb[i].Float()
-						}
-						if max[i] < polygonPc[i].Float() {
-							max[i] = polygonPc[i].Float()
-						}
-					}
-
-					step := getStep(polygonPa, polygonPb, polygonPc, objectSpacing)
-					polygonPoints := getPolygonPoints(step, polygonPa, polygonPb, polygonPc)
-					texturePoints := getTexturePoints(step, texturePa, texturePb, texturePc)
-
-					var generateCmds []string
-					for i := 0; i < len(polygonPoints); i++ {
-						polygonPoint := polygonPoints[i]
-						x := math.Round(polygonPoint[0].Div(objectSpacing).Float()) * objectSpacing.Float()
-						y := math.Round(polygonPoint[1].Div(objectSpacing).Float()) * objectSpacing.Float()
-						z := math.Round(polygonPoint[2].Div(objectSpacing).Float()) * objectSpacing.Float()
-
-						// Image position mapping
-						//  Golang:   | Obj:
-						//   0 - X+   |  Y+
-						//   |        |  |
-						//   Y+       |  0 - X+
-
-						texturePoint := texturePoints[i]
-						// -1..1 => -width..width
-						textureX := texturePoint[0].Mod(NewFrac(1, 1)).Float()
-						textureIndexX := int(textureX * float64(len(material[currentTexture])))
-						// -1..1 => height..-height
-						textureY := 1 - texturePoint[1].Mod(NewFrac(1, 1)).Float()
-						textureIndexY := int(textureY * float64(len(material[currentTexture][textureIndexX])))
-						textureColor := material[currentTexture][textureIndexX][textureIndexY]
-						blockId := nearestColorBlock(textureColor, blockColor)
-
-						generateCmds = append(generateCmds, generator(textureColor, x, y, z, blockId))
-						usedBlock[blockId] = usedBlock[blockId] + 1
-					}
-
-					prefix := fmt.Sprintf("Face L%d: %s", ln, line)
-					fmt.Printf("% -60s Step:%f Now:%s\n    ABC:%s,%s,%s\n", prefix, step.Float(), time.Since(obj_start), polygonPa, polygonPb, polygonPc)
-					face++
-					command = append(command, removeDupe(generateCmds)...)
+						mu.Unlock()
+					}(data, ln, polygonVectors, textureVectors, material[currentTexture], blockColor, obj_start)
 				}
 			default:
 				fmt.Printf("Skip L%d: %s\n", ln, line)
 			}
 		}
+		wg.Wait()
 		fmt.Printf("\nObject parse duration: %s\n", time.Since(obj_start))
 
 		fmt.Printf("\nDuration: %s, Point:%d Face:%d\n", time.Since(start), len(polygonVectors), face)
@@ -225,7 +170,7 @@ func main() {
 			command = append(command, generator(p.c, p.x, p.y, 0.0, blockId))
 			W = math.Max(W, p.x)
 			H = math.Max(H, p.y)
-			usedBlock[blockId] = usedBlock[blockId] + 1
+			totalUsedBlock[blockId] = totalUsedBlock[blockId] + 1
 		}
 		fmt.Printf("\nImage parse duration: %s\n", time.Since(image_start))
 
@@ -270,7 +215,7 @@ func main() {
 				command = append(command, generator(p.c, p.x, p.y, 0.0, blockId))
 				W = math.Max(W, p.x)
 				H = math.Max(H, p.y)
-				usedBlock[blockId] = usedBlock[blockId] + 1
+				totalUsedBlock[blockId] = totalUsedBlock[blockId] + 1
 			}
 
 			generatedCommand = append(generatedCommand, command)
@@ -302,7 +247,7 @@ func main() {
 			Count   int    `json:"count"`
 		}
 		var blockCount []Count
-		for blockID, count := range usedBlock {
+		for blockID, count := range totalUsedBlock {
 			blockCount = append(blockCount, Count{
 				BlockID: blockID,
 				Count:   count,

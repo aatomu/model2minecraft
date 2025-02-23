@@ -1,5 +1,14 @@
 package main
 
+import (
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
 func getStep(Pa, Pb, Pc [3]Frac, spacing Frac) (step Frac) {
 	var lambdaA, lambdaB, lambdaC Frac
 	step = NewFrac(1, 1)
@@ -125,4 +134,100 @@ func calcDistance(Xa, Ya, Za, Xb, Yb, Zb Frac) Frac {
 	Yab := Ya.Sub(Yb).Pow(2)
 	Zab := Za.Sub(Zb).Pow(2)
 	return Xab.Add(Yab).Add(Zab).Sqrt()
+}
+
+func calcSurface(data string, ln int, polygonVectors [][3]Frac, textureVectors [][2]Frac, texture [][]Color, blockColor map[string]Color, obj_start time.Time) (ok bool, min [3]float64, max [3]float64, commands []string, usedBlock map[string]int) {
+	indexes := strings.Split(data, " ")
+	if len(indexes) < 3 {
+		fmt.Printf("Skip L%d: f %s\n", ln, data)
+		return
+	}
+
+	// Get surface polygon top
+	polygonPaIndex, _ := strconv.Atoi(strings.Split(indexes[0], "/")[0])
+	polygonPbIndex, _ := strconv.Atoi(strings.Split(indexes[1], "/")[0])
+	polygonPcIndex, _ := strconv.Atoi(strings.Split(indexes[2], "/")[0])
+	polygonPa := polygonVectors[polygonPaIndex-1]
+	polygonPb := polygonVectors[polygonPbIndex-1]
+	polygonPc := polygonVectors[polygonPcIndex-1]
+	// Get texture polygon top
+	texturePaIndex, _ := strconv.Atoi(strings.Split(indexes[0], "/")[1])
+	texturePbIndex, _ := strconv.Atoi(strings.Split(indexes[1], "/")[1])
+	texturePcIndex, _ := strconv.Atoi(strings.Split(indexes[2], "/")[1])
+	texturePa := textureVectors[texturePaIndex-1]
+	texturePb := textureVectors[texturePbIndex-1]
+	texturePc := textureVectors[texturePcIndex-1]
+
+	// Get min,max polygon top
+	for i := 0; i < 3; i++ {
+		// min
+		if min[i] > polygonPa[i].Float() {
+			min[i] = polygonPa[i].Float()
+		}
+		if min[i] > polygonPb[i].Float() {
+			min[i] = polygonPb[i].Float()
+		}
+		if min[i] > polygonPc[i].Float() {
+			min[i] = polygonPc[i].Float()
+		}
+		// max
+		if max[i] < polygonPa[i].Float() {
+			max[i] = polygonPa[i].Float()
+		}
+		if max[i] < polygonPb[i].Float() {
+			max[i] = polygonPb[i].Float()
+		}
+		if max[i] < polygonPc[i].Float() {
+			max[i] = polygonPc[i].Float()
+		}
+	}
+
+	step := getStep(polygonPa, polygonPb, polygonPc, objectSpacing)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	var polygonPoints [][3]Frac
+	go func() {
+		defer wg.Done()
+		polygonPoints = getPolygonPoints(step, polygonPa, polygonPb, polygonPc)
+	}()
+	var texturePoints [][2]Frac
+	go func() {
+		defer wg.Done()
+		texturePoints = getTexturePoints(step, texturePa, texturePb, texturePc)
+	}()
+	wg.Wait()
+
+	usedBlock = map[string]int{}
+	for i := 0; i < len(polygonPoints); i++ {
+		polygonPoint := polygonPoints[i]
+		x := math.Round(polygonPoint[0].Div(objectSpacing).Float()) * objectSpacing.Float()
+		y := math.Round(polygonPoint[1].Div(objectSpacing).Float()) * objectSpacing.Float()
+		z := math.Round(polygonPoint[2].Div(objectSpacing).Float()) * objectSpacing.Float()
+
+		// Image position mapping
+		//  Golang:   | Obj:
+		//   0 - X+   |  Y+
+		//   |        |  |
+		//   Y+       |  0 - X+
+
+		texturePoint := texturePoints[i]
+		// -1..1 => -width..width
+		textureX := texturePoint[0].Mod(NewFrac(1, 1)).Float()
+		textureIndexX := int(textureX * float64(len(texture)))
+		// -1..1 => height..-height
+		textureY := 1 - texturePoint[1].Mod(NewFrac(1, 1)).Float()
+		textureIndexY := int(textureY * float64(len(texture[textureIndexX])))
+		textureColor := texture[textureIndexX][textureIndexY]
+		blockId := nearestColorBlock(textureColor, blockColor)
+
+		commands = append(commands, generator(textureColor, x, y, z, blockId))
+		usedBlock[blockId] = usedBlock[blockId] + 1
+	}
+
+	prefix := fmt.Sprintf("Face L%d: f %s", ln, data)
+	fmt.Printf("% -60s Step:%f Now:%s\n    ABC:%s,%s,%s\n", prefix, step.Float(), time.Since(obj_start), polygonPa, polygonPb, polygonPc)
+	commands = removeDupe(commands)
+
+	ok = true
+	return
 }
