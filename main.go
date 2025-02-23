@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"image"
 	_ "image/jpeg"
 	_ "image/png"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,7 +18,7 @@ import (
 // Configuration Area
 var (
 	// output config
-	generateSource Source  = Image
+	generateSource Source  = Video
 	chain          int     = 700000
 	generator      Command = func(rgb Color, x, y, z float64, blockId string) (cmd string) {
 		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId)
@@ -31,8 +32,9 @@ var (
 	// example.png
 	imageFile = "../develop/assets/cbw32.png"
 	// video.mp4 *ffmpeg required
-	videoFile     = ""
-	frameRate int = 20
+	videoFile      = "./minecraft/example.mp4"
+	frameRate  int = 5
+	videoScale     = "128:-1" // ffmpeg rescale argument
 	// minecraft config
 	minecraftRoot = "./minecraft"
 	acceptBlockId = []string{""}                                                    //allowed regexp
@@ -209,32 +211,72 @@ func main() {
 		generatedCommand = append(generatedCommand, command)
 
 	case Image:
+		image_start := time.Now()
 		fmt.Printf("\nImage parse start...\n")
 
-		f, err := os.Open(imageFile)
-		if err != nil {
-			panic(err)
+		// command
+		command := []string{}
+
+		var W, H float64
+		for _, p := range parseImage(imageFile) {
+			blockId := nearestColorBlock(p.c, blockColor)
+
+			command = append(command, generator(p.c, p.x, p.y, 0.0, blockId))
+			W = math.Max(W, p.x)
+			H = math.Max(H, p.y)
+			usedBlock[blockId] = usedBlock[blockId] + 1
 		}
-		defer f.Close()
+		fmt.Printf("\nImage parse duration: %s\n", time.Since(image_start))
 
-		img, _, _ := image.Decode(f)
-		bounds := img.Bounds()
+		fmt.Printf("\nDuration: %s W:%d W:%d\n", time.Since(start), int(W), int(H))
+		generatedCommand = append(generatedCommand, command)
 
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-				r, g, b, _ := img.At(x, y).RGBA()
-				targetColor := Color{
-					r: uint8(r >> 8),
-					g: uint8(g >> 8),
-					b: uint8(b >> 8),
-				}
+	case Video:
+		video_start := time.Now()
+		fmt.Printf("\nVideo parse start...\n")
 
-				blockId := nearestColorBlock(targetColor, blockColor)
-
-				commands = append(commands, generator(targetColor, float64(x), float64(bounds.Max.Y-y), 0.0, blockId))
-				usedBlock[blockId] = usedBlock[blockId] + 1
+		// Get video duration
+		var duration float64
+		fmt.Printf("\nGet video duration start...\n")
+		out, _ := exec.Command("ffmpeg", "-i", videoFile).CombinedOutput()
+		for _, line := range strings.Split(string(out), "\n") {
+			// 動画時間入手
+			if strings.Contains(line, "Duration") {
+				line = regexp.MustCompile(".*([0-9]{2}):([0-9]{2}):([0-9]{2}).*").ReplaceAllString(line, "$1 $2 $3")
+				var hour, min, sec int
+				fmt.Sscanf(line, "%d %d %d", &hour, &min, &sec)
+				duration = float64(hour*3600 + min*60 + sec - 1)
+				break
 			}
 		}
+		fmt.Printf("Video duration: %f", duration)
+		fmt.Printf("\nGet video duration: %s\n", time.Since(video_start))
+
+		fmt.Printf("\nFrame to function start...\n")
+		var W, H float64
+		var frame = 0
+		for current := 0.0; current < duration; current += 1.0 / float64(frameRate) {
+			frame++
+			fmt.Printf("Now: %5.2f/%5.2f, F: %d\n", current, duration, frame)
+			exec.Command("ffmpeg", "-y", "-ss", fmt.Sprintf("%.3f", current), "-i", videoFile, "-frames:v", "1", "-vf", "scale="+videoScale, "./temp.png").Run()
+
+			// command
+			command := []string{}
+
+			for _, p := range parseImage("./temp.png") {
+				blockId := nearestColorBlock(p.c, blockColor)
+
+				command = append(command, generator(p.c, p.x, p.y, 0.0, blockId))
+				W = math.Max(W, p.x)
+				H = math.Max(H, p.y)
+				usedBlock[blockId] = usedBlock[blockId] + 1
+			}
+
+			generatedCommand = append(generatedCommand, command)
+		}
+		fmt.Printf("\nFrame to function duration: %s\n", time.Since(video_start))
+
+		fmt.Printf("\nDuration: %s, Frame: %d, W: %d, H: %d,\n", time.Since(start), len(generatedCommand), int(W), int(H))
 	}
 
 	fmt.Printf("\nCreate function...\n")
