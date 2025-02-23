@@ -57,13 +57,15 @@ func main() {
 	blockColor := blockFilter(blockModelList)
 	fmt.Printf("\nBlock parse duration: %s\n", time.Since(block_start))
 
-	commands := []string{}
+	// [index][]command:string{}
+	generatedCommand := [][]string{}
+
 	usedBlock := map[string]int{}
 
 	switch generateSource {
 	case Object:
-		fmt.Printf("\nObject parse start...\n")
 		obj_start := time.Now()
+		fmt.Printf("\nObject parse start...\n")
 		obj, _ := os.ReadFile(filepath.Join(objectRoot, objectFile))
 
 		// map[materialName][x][y]Color
@@ -77,6 +79,8 @@ func main() {
 		// texture/mtl
 		textureVectors := [][2]Frac{}
 		currentTexture := ""
+		// command
+		command := []string{}
 
 		for ln, line := range strings.Split(string(obj), "\n") {
 			cmd := strings.SplitN(line, " ", 2)
@@ -192,7 +196,7 @@ func main() {
 					prefix := fmt.Sprintf("Face L%d: %s", ln, line)
 					fmt.Printf("% -60s Step:%f Now:%s\n    ABC:%s,%s,%s\n", prefix, step.Float(), time.Since(obj_start), polygonPa, polygonPb, polygonPc)
 					face++
-					commands = append(commands, removeDupe(generateCmds)...)
+					command = append(command, removeDupe(generateCmds)...)
 				}
 			default:
 				fmt.Printf("Skip L%d: %s\n", ln, line)
@@ -202,6 +206,8 @@ func main() {
 
 		fmt.Printf("\nDuration: %s, Point:%d Face:%d\n", time.Since(start), len(polygonVectors), face)
 		fmt.Printf("Min:[%.2f,%.2f,%.2f] Max:[%.2f,%.2f,%.2f] H:%.2f W:%.2f D:%.2f\n", min[0], min[1], min[2], max[0], max[1], max[2], max[0]-min[0], max[1]-min[1], max[2]-min[2])
+		generatedCommand = append(generatedCommand, command)
+
 	case Image:
 		fmt.Printf("\nImage parse start...\n")
 
@@ -233,9 +239,17 @@ func main() {
 
 	fmt.Printf("\nCreate function...\n")
 	create_start := time.Now()
-	functions, commandCount := CommandToMCfunction(commands, "", chain)
-	fmt.Printf("Generated command/function: %d/%d\n", len(functions), commandCount)
-	fmt.Printf("  %s", strings.Join(functions, "  \n"))
+	var totalFunctions, totalCommand int
+	for i, command := range generatedCommand {
+		functions, commandCount := CommandToMCfunction(command, fmt.Sprintf("f%04d-i", i), chain)
+		totalFunctions += len(functions)
+		totalCommand += commandCount
+
+		for _, f := range functions {
+			fmt.Printf("%s.mcfunction\n", f)
+		}
+	}
+	fmt.Printf("Total generated command/function: %d/%d\n", totalFunctions, totalCommand)
 	fmt.Printf("\nCreate function duration: %s\n", time.Since(create_start))
 
 	if isCountBlock {
