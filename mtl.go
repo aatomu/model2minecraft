@@ -47,18 +47,18 @@ func parseMtl(fileName string) map[string][][]Color {
 				bounds := img.Bounds()
 
 				// scan image
-				var colorMap [][]Color
+				colorMap := make([][]Color, bounds.Dx())
 				for x := bounds.Min.X; x < bounds.Max.X; x++ {
-					yColors := []Color{}
+					yColors := make([]Color, bounds.Dy())
 					for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 						r, g, b, _ := img.At(x, y).RGBA()
-						yColors = append(yColors, Color{
+						yColors[y-bounds.Min.Y] = Color{
 							r: uint8(r >> 8),
 							g: uint8(g >> 8),
 							b: uint8(b >> 8),
-						})
+						}
 					}
-					colorMap = append(colorMap, yColors)
+					colorMap[x-bounds.Min.X] = yColors
 				}
 
 				material[currentMaterial] = colorMap
