@@ -49,15 +49,13 @@ func parseMtl(fileName string) map[string][][]Color {
 				// scan image
 				var colorMap [][]Color
 				for x := bounds.Min.X; x < bounds.Max.X; x++ {
-					fmt.Printf("Read Image X Position: %d/%d\n", x+1, bounds.Max.X)
-
 					yColors := []Color{}
 					for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 						r, g, b, _ := img.At(x, y).RGBA()
 						yColors = append(yColors, Color{
-							r: uint8(r >> 8),
-							g: uint8(g >> 8),
-							b: uint8(b >> 8),
+							r: int(r >> 8),
+							g: int(g >> 8),
+							b: int(b >> 8),
 						})
 					}
 					colorMap = append(colorMap, yColors)

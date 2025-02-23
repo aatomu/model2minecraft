@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 	"os"
@@ -15,7 +14,7 @@ import (
 
 var (
 	// output config
-	scale   = NewFrac(5, 5)
+	scale   = NewFrac(9, 5)
 	spacing = NewFrac(1, 1)
 	// command            = "particle dust{color:[0f,0f,0f],scale:1f} ~%.2f ~%.2f ~%.2f 0 0 0 0 1 force @a"
 	chain int = 700000
@@ -24,8 +23,8 @@ var (
 	objectFile = "HatsuneMiku.obj"
 	// minecraft config
 	minecraftRoot = "./minecraft"
-	acceptBlockId = []string{""}                                             //allowed regexp
-	ignoreBlockId = []string{"powder", "sand", "gravel", "glass", "spawner"} //allowed regexp
+	acceptBlockId = []string{""}                                                    //allowed regexp
+	ignoreBlockId = []string{"powder", "sand", "gravel", "glass", "spawner", "ice"} //allowed regexp
 )
 
 func main() {
@@ -35,7 +34,6 @@ func main() {
 	fmt.Printf("Block parse start...\n")
 	blockModelList := scanBlockModel()
 	blockColor := blockFilter(blockModelList)
-	log.Println(blockColor)
 	fmt.Printf("Block parse duration: %s\n", time.Since(block_start))
 
 	fmt.Printf("Object parse start...\n")
@@ -45,7 +43,6 @@ func main() {
 
 	// map[materialName][x][y]Color
 	var material map[string][][]Color
-	log.Println(material)
 
 	// object/polygon
 	polygonVectors := [][3]Frac{}
@@ -56,6 +53,8 @@ func main() {
 	textureVectors := [][2]Frac{}
 	currentTexture := ""
 	useBlocks := map[string]int{}
+
+	colors := []string{}
 
 	for ln, line := range strings.Split(string(obj), "\n") {
 		cmd := strings.SplitN(line, " ", 2)
@@ -82,7 +81,7 @@ func main() {
 			{
 				var x, y float64
 				fmt.Sscanf(data, "%f %f", &x, &y)
-				textureVectors = append(textureVectors, [2]Frac{Float2Frac(x).Mul(scale), Float2Frac(y).Mul(scale)})
+				textureVectors = append(textureVectors, [2]Frac{Float2Frac(x), Float2Frac(y)})
 				fmt.Printf("TextureVector L%d: %s\n", ln, line)
 			}
 		case "usemtl": // Set use material
@@ -148,19 +147,22 @@ func main() {
 					y := math.Round(polygonPoint[1].Div(spacing).Float()) * spacing.Float()
 					z := math.Round(polygonPoint[2].Div(spacing).Float()) * spacing.Float()
 
+					// Image position mapping
+					//  Golang:   | Obj:
+					//   0 - X+   |  Y+
+					//   |        |  |
+					//   Y+       |  0 - X+
+
 					texturePoint := texturePoints[i]
 					// -1..1 => -width..width
-					textureX := int(texturePoint[0].Mod(NewFrac(1, 1)).Float() * float64(len(material[currentTexture])))
-					if textureX < 0 {
-						textureX = len(material[currentTexture]) + textureX
-					}
-					// -1..1 => -height..height
-					textureY := int(texturePoint[1].Mod(NewFrac(1, 1)).Float())
-					if textureY < 0 {
-						textureY = len(material[currentTexture][textureX]) + textureY
-					}
-					textureColor := material[currentTexture][textureX][textureY]
+					textureX := texturePoint[0].Mod(NewFrac(1, 1)).Float()
+					textureIndexX := int(textureX * float64(len(material[currentTexture])))
+					// -1..1 => height..-height
+					textureY := 1 - texturePoint[1].Mod(NewFrac(1, 1)).Float()
+					textureIndexY := int(textureY * float64(len(material[currentTexture][textureIndexX])))
+					textureColor := material[currentTexture][textureIndexX][textureIndexY]
 					blockId := nearestColorBlock(textureColor, blockColor)
+					colors = append(colors, fmt.Sprintf("target: 0x%02X%02X%02X block: 0x%02X%02X%02X B:%s \n", textureColor.r, textureColor.g, textureColor.b, blockColor[blockId].r, blockColor[blockId].g, blockColor[blockId].b, blockId))
 
 					generateCmds = append(generateCmds, fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId))
 					useBlocks[blockId] = useBlocks[blockId] + 1
@@ -201,7 +203,13 @@ func main() {
 		return b.Count - a.Count // 降順にソート
 	})
 	for i, v := range blockCount {
-		fmt.Printf("% 4d: %-5s %d\n", i+1, v.BlockID, v.Count)
+		fmt.Printf("% 4d: %-5s %d 0x%02X%02X%02X\n", i+1, v.BlockID, v.Count, blockColor[v.BlockID].r, blockColor[v.BlockID].g, blockColor[v.BlockID].b)
+	}
+
+	fmt.Println(strings.Repeat("\n", 20))
+	fmt.Println(strings.Join(removeDupe(colors), "\n"))
+	for id, c := range blockColor {
+		fmt.Printf("id:%s color:0x%02X%02X%02X\n", id, c.r, c.g, c.b)
 	}
 }
 
