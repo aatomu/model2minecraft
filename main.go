@@ -291,7 +291,7 @@ func main() {
 			fmt.Printf("%s.mcfunction\n", f)
 		}
 	}
-	fmt.Printf("Total generated command/function: %d/%d\n", totalFunctions, totalCommand)
+	fmt.Printf("Total generated command/function: %d/%d\n", totalCommand, totalFunctions)
 	fmt.Printf("\nCreate function duration: %s\n", time.Since(create_start))
 
 	if isCountBlock {
