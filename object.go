@@ -207,7 +207,12 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 		textureX := texturePoint[0].Mod(NewFrac(1, 1)).Float()
 		textureIndexX := int(textureX * float64(len(texture)))
 		// -1..1 => height..-height
-		textureY := 1 - texturePoint[1].Mod(NewFrac(1, 1)).Float()
+		var textureY float64
+		if objectIsUVYAxisUp {
+			textureY = 1 - texturePoint[1].Mod(NewFrac(1, 1)).Float()
+		} else {
+			textureY = texturePoint[1].Mod(NewFrac(1, 1)).Float()
+		}
 		textureIndexY := int(textureY * float64(len(texture[textureIndexX])))
 		textureColor := texture[textureIndexX][textureIndexY]
 		blockId := nearestColorBlock(textureColor, blockColor)

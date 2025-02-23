@@ -30,6 +30,7 @@ var (
 	objectFile         = "HatsuneMiku.obj"
 	objectScale        = NewFrac(9, 5)
 	objectSpacing      = NewFrac(1, 1)
+	objectIsUVYAxisUp  = false
 	objectCalcParallel = 500
 	// example.png
 	imageFile = "../develop/assets/cbw32.png"
