@@ -142,6 +142,7 @@ func main() {
 						for id, count := range usedBlocks {
 							totalUsedBlock[id] = totalUsedBlock[id] + count
 						}
+						face++
 						mu.Unlock()
 					}(data, ln, polygonVectors, textureVectors, material[currentTexture], blockColor, obj_start)
 				}
