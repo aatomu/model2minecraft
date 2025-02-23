@@ -11,123 +11,93 @@ type Frac struct {
 	Bottom *big.Int
 }
 
-func NewFrac(top, bottom int64) (f Frac) {
-	f = Frac{
+func NewFrac(top, bottom int64) Frac {
+	f := Frac{
 		Top:    big.NewInt(top),
 		Bottom: big.NewInt(bottom),
 	}
-
 	f.approx()
-	return
+	return f
 }
 
-func Float2Frac(x float64) (f Frac) {
-	bottom := 1e10
-	top := int64(math.Round(x * bottom))
-
-	f = Frac{
-		Top:    big.NewInt(top),
-		Bottom: big.NewInt(int64(bottom)),
-	}
-
-	f.approx()
-	return
+func Float2Frac(x float64) Frac {
+	return Frac{
+		Top:    new(big.Int).SetInt64(int64(math.Round(x * 1e10))),
+		Bottom: big.NewInt(1e10),
+	}.approx()
 }
 
 // 約分
-func (f *Frac) approx() {
+func (f Frac) approx() Frac {
 	gcd := new(big.Int).GCD(nil, nil, f.Top, f.Bottom)
-	f.Top = new(big.Int).Div(f.Top, gcd)
-	f.Bottom = new(big.Int).Div(f.Bottom, gcd)
-
-	if f.Bottom.Cmp(big.NewInt(0)) == -1 {
-		f.Top = new(big.Int).Mul(f.Top, big.NewInt(-1))
-		f.Bottom = new(big.Int).Mul(f.Bottom, big.NewInt(-1))
-	}
-}
-
-func (f Frac) Add(n Frac) (ans Frac) {
-	ans = Frac{
-		Top:    new(big.Int).Add(new(big.Int).Mul(f.Top, n.Bottom), new(big.Int).Mul(n.Top, f.Bottom)),
-		Bottom: new(big.Int).Mul(f.Bottom, n.Bottom),
+	if gcd.Cmp(big.NewInt(1)) != 0 { // gcd != 1
+		f.Top.Div(f.Top, gcd)
+		f.Bottom.Div(f.Bottom, gcd)
 	}
 
-	ans.approx()
-	return
-}
-
-func (f Frac) Sub(n Frac) (ans Frac) {
-	ans = Frac{
-		Top:    new(big.Int).Sub(new(big.Int).Mul(f.Top, n.Bottom), new(big.Int).Mul(n.Top, f.Bottom)),
-		Bottom: new(big.Int).Mul(f.Bottom, n.Bottom),
+	if f.Bottom.Sign() < 0 {
+		f.Top.Neg(f.Top)
+		f.Bottom.Neg(f.Bottom)
 	}
 
-	ans.approx()
-	return
+	return f
 }
 
-func (f Frac) Mul(n Frac) (ans Frac) {
+func (f Frac) Add(n Frac) Frac {
+	top := new(big.Int).Mul(f.Top, n.Bottom)
+	top.Add(top, new(big.Int).Mul(n.Top, f.Bottom))
 
-	ans = Frac{
-		Top:    new(big.Int).Mul(f.Top, n.Top),
-		Bottom: new(big.Int).Mul(f.Bottom, n.Bottom),
-	}
-
-	ans.approx()
-	return
-}
-
-func (f Frac) Div(n Frac) (ans Frac) {
-	ans = Frac{
-		Top:    new(big.Int).Mul(f.Top, n.Bottom),
-		Bottom: new(big.Int).Mul(f.Bottom, n.Top),
-	}
-
-	ans.approx()
-	return
-}
-
-func (f Frac) Mod(n Frac) (ans Frac) {
-	top := new(big.Int).Mod(new(big.Int).Mul(f.Top, n.Bottom), new(big.Int).Mul(f.Bottom, n.Top))
 	bottom := new(big.Int).Mul(f.Bottom, n.Bottom)
-
-	ans = Frac{
-		Top:    top,
-		Bottom: bottom,
-	}
-
-	ans.approx()
-	return
+	return Frac{Top: top, Bottom: bottom}.approx()
 }
 
-func (f Frac) Pow(n int64) (ans Frac) {
+func (f Frac) Sub(n Frac) Frac {
+	top := new(big.Int).Mul(f.Top, n.Bottom)
+	top.Sub(top, new(big.Int).Mul(n.Top, f.Bottom))
+
+	bottom := new(big.Int).Mul(f.Bottom, n.Bottom)
+	return Frac{Top: top, Bottom: bottom}.approx()
+}
+
+func (f Frac) Mul(n Frac) Frac {
+	top := new(big.Int).Mul(f.Top, n.Top)
+	bottom := new(big.Int).Mul(f.Bottom, n.Bottom)
+	return Frac{Top: top, Bottom: bottom}.approx()
+}
+
+func (f Frac) Div(n Frac) Frac {
+	top := new(big.Int).Mul(f.Top, n.Bottom)
+	bottom := new(big.Int).Mul(f.Bottom, n.Top)
+	return Frac{Top: top, Bottom: bottom}.approx()
+}
+
+func (f Frac) Mod(n Frac) Frac {
+	top := new(big.Int).Mul(f.Top, n.Bottom)
+	top.Mod(top, new(big.Int).Mul(f.Bottom, n.Top))
+
+	bottom := new(big.Int).Mul(f.Bottom, n.Bottom)
+	return Frac{Top: top, Bottom: bottom}.approx()
+}
+
+func (f Frac) Pow(n int64) Frac {
 	if n < 0 {
 		return Frac{Top: f.Bottom, Bottom: f.Top}.Pow(-n)
 	}
-	ans = Frac{
-		Top:    new(big.Int).Exp(f.Top, big.NewInt(n), nil),
-		Bottom: new(big.Int).Exp(f.Bottom, big.NewInt(n), nil),
-	}
 
-	ans.approx()
-	return
+	top := new(big.Int).Exp(f.Top, big.NewInt(n), nil)
+	bottom := new(big.Int).Exp(f.Bottom, big.NewInt(n), nil)
+	return Frac{Top: top, Bottom: bottom}.approx()
 }
 
-func (f Frac) Sqrt() (ans Frac) {
+func (f Frac) Sqrt() Frac {
 	top := new(big.Int).Sqrt(f.Top)
 	bottom := new(big.Int).Sqrt(f.Bottom)
 
 	// 完全平方
 	if new(big.Int).Mul(top, top).Cmp(f.Top) == 0 && new(big.Int).Mul(bottom, bottom).Cmp(f.Bottom) == 0 {
-		ans = Frac{Top: top, Bottom: bottom}
-	} else {
-		top = new(big.Int).Sqrt(new(big.Int).Mul(f.Top, new(big.Int).Exp(big.NewInt(10), big.NewInt(100), nil)))
-		bottom = new(big.Int).Sqrt(new(big.Int).Mul(f.Bottom, new(big.Int).Exp(big.NewInt(10), big.NewInt(100), nil)))
-		ans = Frac{Top: top, Bottom: bottom}
+		return Frac{Top: top, Bottom: bottom}
 	}
-
-	ans.approx()
-	return
+	return Float2Frac(math.Sqrt(f.Float()))
 }
 
 func (f Frac) String() string {
