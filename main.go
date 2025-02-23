@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"math"
 	"os"
 	"path/filepath"
@@ -14,9 +17,7 @@ import (
 // Configuration Area
 var (
 	// output config
-	generateSource Source  = Object
-	scale                  = NewFrac(9, 5)
-	spacing                = NewFrac(1, 1)
+	generateSource Source  = Image
 	chain          int     = 700000
 	generator      Command = func(rgb Color, x, y, z float64, blockId string) (cmd string) {
 		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId)
@@ -25,10 +26,13 @@ var (
 	// object config
 	objectRoot = "./3d"
 	objectFile = "HatsuneMiku.obj"
+	scale      = NewFrac(9, 5)
+	spacing    = NewFrac(1, 1)
 	// example.png
-	imageFile = ""
+	imageFile = "../develop/assets/cbw32.png"
 	// video.mp4 *ffmpeg required
-	videoFile = ""
+	videoFile     = ""
+	frameRate int = 20
 	// minecraft config
 	minecraftRoot = "./minecraft"
 	acceptBlockId = []string{""}                                                    //allowed regexp
@@ -39,9 +43,9 @@ var (
 type Source int
 
 const (
-	Object Source = iota
-	Png
-	Video
+	Object Source = iota // Supported .obj(using .mtl&.png)
+	Image                // Supported .png .jpeg
+	Video                // Supported .mp4
 )
 
 func main() {
@@ -198,6 +202,33 @@ func main() {
 
 		fmt.Printf("\nDuration: %s, Point:%d Face:%d\n", time.Since(start), len(polygonVectors), face)
 		fmt.Printf("Min:[%.2f,%.2f,%.2f] Max:[%.2f,%.2f,%.2f] H:%.2f W:%.2f D:%.2f\n", min[0], min[1], min[2], max[0], max[1], max[2], max[0]-min[0], max[1]-min[1], max[2]-min[2])
+	case Image:
+		fmt.Printf("\nImage parse start...\n")
+
+		f, err := os.Open(imageFile)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+
+		img, _, _ := image.Decode(f)
+		bounds := img.Bounds()
+
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+				r, g, b, _ := img.At(x, y).RGBA()
+				targetColor := Color{
+					r: uint8(r >> 8),
+					g: uint8(g >> 8),
+					b: uint8(b >> 8),
+				}
+
+				blockId := nearestColorBlock(targetColor, blockColor)
+
+				commands = append(commands, generator(targetColor, float64(x), float64(bounds.Max.Y-y), 0.0, blockId))
+				usedBlock[blockId] = usedBlock[blockId] + 1
+			}
+		}
 	}
 
 	fmt.Printf("\nCreate function...\n")
