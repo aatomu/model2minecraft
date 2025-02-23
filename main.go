@@ -208,7 +208,7 @@ func main() {
 	fmt.Printf("\nCreate function duration: %s\n", time.Since(create_start))
 
 	if isCountBlock {
-		fmt.Printf("\nBlock information: %s\n", time.Since(create_start))
+		fmt.Printf("\nBlock information:\n")
 		type Count struct {
 			BlockID string `json:"blockID"`
 			Count   int    `json:"count"`
@@ -228,6 +228,8 @@ func main() {
 			fmt.Printf("% 4d: %-5s %d\n", i+1, v.BlockID, v.Count)
 		}
 	}
+
+	fmt.Printf("\nFinished program: %s\n", time.Since(start))
 }
 
 func removeDupe(in []string) []string {
