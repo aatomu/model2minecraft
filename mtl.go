@@ -10,7 +10,7 @@ import (
 )
 
 func parseMtl(fileName string) map[string][][]Color {
-	mtl, err := os.ReadFile(filepath.Join(objectRoot, fileName))
+	mtl, err := os.ReadFile(filepath.Join(objectDirectory, fileName))
 	if err != nil {
 		panic(err)
 	}
@@ -37,7 +37,7 @@ func parseMtl(fileName string) map[string][][]Color {
 			{
 				fmt.Printf("Texture L%d: %s =>%s\n", ln, line, currentMaterial)
 
-				texture, err := os.Open(filepath.Join(objectRoot, data))
+				texture, err := os.Open(filepath.Join(objectDirectory, data))
 				if err != nil {
 					panic(err)
 				}

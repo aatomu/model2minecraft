@@ -6,8 +6,8 @@ import (
 )
 
 func getBlock(target Color) (blockID string) {
-	if colorBitDepth < 6 {
-		return colorMap[target.r>>uint8(8-colorBitDepth)][target.g>>uint8(8-colorBitDepth)][target.b>>uint8(8-colorBitDepth)]
+	if colorDepthBit < 6 {
+		return colorMap[target.r>>uint8(8-colorDepthBit)][target.g>>uint8(8-colorDepthBit)][target.b>>uint8(8-colorDepthBit)]
 	}
 	return nearestColorBlock(target)
 }

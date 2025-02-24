@@ -18,32 +18,36 @@ import (
 
 // Configuration Area
 var (
-	// output config
-	generateSource Source  = Object
-	chain          int     = 700000
-	colorBitDepth          = 4 // 1..8
-	generator      Command = func(arg CommandArgument) (cmd string) {
-		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", arg.x, arg.x, arg.z, arg.blockId)
+	// Output Configuration
+	sourceType       Source  = Object
+	maxCommandChain  int     = 700000
+	colorDepthBit    int     = 4 // 1-8
+	commandGenerator Command = func(arg CommandArgument) (cmd string) {
+		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", arg.x, arg.y, arg.z, arg.blockId)
 		// return fmt.Sprintf("particle dust{color:[%ff,%ff,%ff],scale:0.2f} ~%.2f ~%.2f ~%.2f 0 0 0 0 1 force @a", float64(rgb.r)/255, float64(rgb.g)/255, float64(rgb.b)/255, x, y, z)
 	}
-	isCountBlock bool = false
-	// object config
-	objectRoot         = "./3d"
-	objectFile         = "HatsuneMiku.obj"
-	objectScale        = NewFrac(9, 5)
-	objectSpacing      = NewFrac(1, 1)
-	objectIsUVYAxisUp  = true
-	objectCalcParallel = 500
-	// example.png
-	imageFile = "../develop/assets/cbw32.png"
-	// video.mp4 *ffmpeg required
-	videoFile      = "./minecraft/example.mp4"
-	frameRate  int = 20
-	videoScale     = "200:-1" // ffmpeg rescale argument
-	// minecraft config
-	minecraftRoot = "./minecraft"
-	acceptBlockId = []string{""}                                                       //allowed regexp
-	ignoreBlockId = []string{"powder$", "sand$", "gravel$", "glass", "spawner", "ice"} //allowed regexp
+	enableBlockCount bool = false
+
+	// Object Configuration
+	objectDirectory   string = "./3d"
+	objectFilename    string = "HatsuneMiku.obj"
+	objectScale       Frac   = NewFrac(9, 5)
+	objectGridSpacing Frac   = NewFrac(1, 1)
+	isObjectUVYAxisUp bool   = true
+	parallelLimit     int    = 500
+
+	// Image Configuration
+	imageFilename string = "../develop/assets/cbw32.png"
+
+	// Video Configuration (*requires ffmpeg)
+	videoFilename  string = "./minecraft/example.mp4"
+	videoFrameRate int    = 20
+	videoScaleSize string = "200:-1" // ffmpeg rescale argument
+
+	// Minecraft Configuration
+	minecraftDirectory string   = "./assets"
+	allowedBlockIds    []string = []string{""}                                                       // Allowed regex patterns
+	ignoredBlockIds    []string = []string{"powder$", "sand$", "gravel$", "glass", "spawner", "ice"} // Ignored regex patterns
 )
 
 // Supported file format
@@ -61,7 +65,7 @@ var (
 	wg             sync.WaitGroup
 	wgCurrentCount int
 	wgTotalRoutine int
-	wgSession      chan struct{} = make(chan struct{}, objectCalcParallel)
+	wgSession      chan struct{} = make(chan struct{}, parallelLimit)
 	mu             sync.Mutex
 	// Color
 	blockColor map[string]Color
@@ -81,10 +85,10 @@ func main() {
 	fmt.Printf("\nBlock parse duration: %s\n", time.Since(block_start))
 
 	// block color to color mapping
-	if colorBitDepth < 6 {
+	if colorDepthBit < 6 {
 		color_start := time.Now()
-		fmt.Printf("\n%dBit color mapping start...\n", colorBitDepth)
-		colorMaxValue := 0xff >> (8 - colorBitDepth)
+		fmt.Printf("\n%dBit color mapping start...\n", colorDepthBit)
+		colorMaxValue := 0xff >> (8 - colorDepthBit)
 		colorMap = make([][][]string, 0, colorMaxValue*colorMaxValue*colorMaxValue)
 		for r := 0; r <= colorMaxValue; r++ {
 			fmt.Printf("Calc R: %d/%d, G: 0..%d, B:0..%d, Now:%s\n", r, colorMaxValue, colorMaxValue, colorMaxValue, time.Since(color_start))
@@ -95,7 +99,7 @@ func main() {
 				go func(fR, fG int) {
 					BColorMap := make([]string, 0, colorMaxValue)
 					for b := 0; b <= colorMaxValue; b++ {
-						BColorMap = append(BColorMap, nearestColorBlock(Color{uint8(fR << (8 - colorBitDepth)), uint8(fG << (8 - colorBitDepth)), uint8(b << (8 - colorBitDepth))}))
+						BColorMap = append(BColorMap, nearestColorBlock(Color{uint8(fR << (8 - colorDepthBit)), uint8(fG << (8 - colorDepthBit)), uint8(b << (8 - colorDepthBit))}))
 					}
 
 					mu.Lock()
@@ -117,11 +121,11 @@ func main() {
 		fmt.Printf("\n\nDon't use color map.\n\n")
 	}
 
-	switch generateSource {
+	switch sourceType {
 	case Object:
 		obj_start := time.Now()
 		fmt.Printf("\nObject parse start...\n")
-		obj, _ := os.ReadFile(filepath.Join(objectRoot, objectFile))
+		obj, _ := os.ReadFile(filepath.Join(objectDirectory, objectFilename))
 
 		// map[materialName][x][y]Color
 		var material map[string][][]Color
@@ -230,7 +234,7 @@ func main() {
 
 		var W, H float64
 
-		f, err := os.Open(imageFile)
+		f, err := os.Open(imageFilename)
 		if err != nil {
 			panic(err)
 		}
@@ -263,7 +267,7 @@ func main() {
 		// Get video duration
 		var duration float64
 		fmt.Printf("\nGet video duration start...\n")
-		out, _ := exec.Command("ffmpeg", "-i", videoFile).CombinedOutput()
+		out, _ := exec.Command("ffmpeg", "-i", videoFilename).CombinedOutput()
 		for _, line := range strings.Split(string(out), "\n") {
 			// 動画時間入手
 			if strings.Contains(line, "Duration") {
@@ -281,7 +285,7 @@ func main() {
 		var W, H float64
 		var frame = 0
 		var frameData = map[int][]CommandArgument{}
-		for current := 0.0; current < duration; current += 1.0 / float64(frameRate) {
+		for current := 0.0; current < duration; current += 1.0 / float64(videoFrameRate) {
 			frame++
 
 			wgSession <- struct{}{}
@@ -297,7 +301,7 @@ func main() {
 				}()
 
 				fmt.Printf("Start: frame: %d(%5.2f/%5.2f)\n", fFrame, fCurrent, fDuration)
-				execute := exec.Command("ffmpeg", "-i", videoFile, "-ss", fmt.Sprintf("%.3f", fCurrent), "-frames:v", "1", "-vf", "scale="+videoScale, "-f", "image2pipe", "-vcodec", "png", "pipe:1")
+				execute := exec.Command("ffmpeg", "-i", videoFilename, "-ss", fmt.Sprintf("%.3f", fCurrent), "-frames:v", "1", "-vf", "scale="+videoScaleSize, "-f", "image2pipe", "-vcodec", "png", "pipe:1")
 
 				var buf bytes.Buffer
 				execute.Stdout = &buf
@@ -346,7 +350,7 @@ func main() {
 	create_start := time.Now()
 	var totalFunctions, totalCommand int
 	for i, args := range argumentList {
-		functions, commandCount := CommandToMCfunction(args, fmt.Sprintf("f%04d-i", i+1), chain)
+		functions, commandCount := CommandToMCfunction(args, fmt.Sprintf("f%04d-i", i+1))
 		totalFunctions += len(functions)
 		totalCommand += commandCount
 
@@ -357,7 +361,7 @@ func main() {
 	fmt.Printf("Total generated command/function: %d/%d\n", totalCommand, totalFunctions)
 	fmt.Printf("\nCreate function duration: %s\n", time.Since(create_start))
 
-	if isCountBlock {
+	if enableBlockCount {
 		fmt.Printf("\nBlock information:\n")
 		type Count struct {
 			BlockID string `json:"blockID"`

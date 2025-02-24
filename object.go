@@ -174,7 +174,7 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 		}
 	}
 
-	step = getStep(polygonPa, polygonPb, polygonPc, objectSpacing)
+	step = getStep(polygonPa, polygonPb, polygonPc, objectGridSpacing)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	var polygonPoints [][3]Frac
@@ -194,15 +194,15 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 
 	for i := 0; i < len(polygonPoints); i++ {
 		polygonPoint := polygonPoints[i]
-		x := math.Round(polygonPoint[0].Div(objectSpacing).Float()) * objectSpacing.Float()
+		x := math.Round(polygonPoint[0].Div(objectGridSpacing).Float()) * objectGridSpacing.Float()
 		if math.Abs(x) < threshold {
 			x = 0
 		}
-		y := math.Round(polygonPoint[1].Div(objectSpacing).Float()) * objectSpacing.Float()
+		y := math.Round(polygonPoint[1].Div(objectGridSpacing).Float()) * objectGridSpacing.Float()
 		if math.Abs(y) < threshold {
 			y = 0
 		}
-		z := math.Round(polygonPoint[2].Div(objectSpacing).Float()) * objectSpacing.Float()
+		z := math.Round(polygonPoint[2].Div(objectGridSpacing).Float()) * objectGridSpacing.Float()
 		if math.Abs(z) < threshold {
 			z = 0
 		}
@@ -219,7 +219,7 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 		textureIndexX := int(textureX * float64(len(texture)))
 		// -1..1 => height..-height
 		var textureY float64
-		if objectIsUVYAxisUp {
+		if isObjectUVYAxisUp {
 			textureY = 1 - texturePoint[1].Mod(NewFrac(1, 1)).Float()
 		} else {
 			textureY = texturePoint[1].Mod(NewFrac(1, 1)).Float()
