@@ -5,13 +5,19 @@ import (
 	"slices"
 )
 
-func nearestColorBlock(target Color, blocks map[string]Color) (blockID string) {
+func getBlock(target Color) (blockID string) {
+	if colorBitDepth < 6 {
+		return colorMap[target.r>>uint8(8-colorBitDepth)][target.g>>uint8(8-colorBitDepth)][target.b>>uint8(8-colorBitDepth)]
+	}
+	return nearestColorBlock(target)
+}
+func nearestColorBlock(target Color) (blockID string) {
 	type Distance struct {
 		blockID string
 		d       float64
 	}
 	distance := []Distance{}
-	for blockID, color := range blocks {
+	for blockID, color := range blockColor {
 		// // RGB
 		// distance = append(distance, Distance{
 		// 	blockID: blockID,

@@ -64,8 +64,9 @@ var (
 	wgSession      chan struct{} = make(chan struct{}, objectCalcParallel)
 	mu             sync.Mutex
 	// Color
-	colorMap [][][]string
-	// minecraft
+	blockColor map[string]Color
+	colorMap   [][][]string // Color map use: colorBitDepth < 6
+	// Minecraft
 	argumentList   [][]CommandArgument // [index][]command{}
 	totalUsedBlock map[string]int      = make(map[string]int)
 )
@@ -76,38 +77,44 @@ func main() {
 	block_start := time.Now()
 	fmt.Printf("\nBlock parse start...\n")
 	blockModelList := scanBlockModel()
-	blockColor := blockFilter(blockModelList)
+	blockColor = blockFilter(blockModelList)
 	fmt.Printf("\nBlock parse duration: %s\n", time.Since(block_start))
 
 	// block color to color mapping
-	fmt.Printf("\n%dBit color mapping start...\n", colorBitDepth)
-	colorMaxValue := 0xff >> (8 - colorBitDepth)
-	colorMap = make([][][]string, 0, colorMaxValue*colorMaxValue*colorMaxValue)
-	for r := 0; r <= colorMaxValue; r++ {
-		fmt.Printf("Calc R: %d/%d, G: 0..%d, B:0..%d \n", r, colorMaxValue, colorMaxValue, colorMaxValue)
-		// GBColorMap := make([][]string, 0, m*m)
-		GBColorMap := map[int][]string{}
-		for g := 0; g <= colorMaxValue; g++ {
-			wg.Add(1)
-			go func(fR, fG int) {
-				BColorMap := make([]string, 0, colorMaxValue)
-				for b := 0; b <= colorMaxValue; b++ {
-					BColorMap = append(BColorMap, nearestColorBlock(Color{uint8(fR << (8 - colorBitDepth)), uint8(fG << (8 - colorBitDepth)), uint8(b << (8 - colorBitDepth))}, blockColor))
-				}
+	if colorBitDepth < 6 {
+		color_start := time.Now()
+		fmt.Printf("\n%dBit color mapping start...\n", colorBitDepth)
+		colorMaxValue := 0xff >> (8 - colorBitDepth)
+		colorMap = make([][][]string, 0, colorMaxValue*colorMaxValue*colorMaxValue)
+		for r := 0; r <= colorMaxValue; r++ {
+			fmt.Printf("Calc R: %d/%d, G: 0..%d, B:0..%d, Now:%s\n", r, colorMaxValue, colorMaxValue, colorMaxValue, time.Since(color_start))
+			// GBColorMap := make([][]string, 0, m*m)
+			GBColorMap := map[int][]string{}
+			for g := 0; g <= colorMaxValue; g++ {
+				wg.Add(1)
+				go func(fR, fG int) {
+					BColorMap := make([]string, 0, colorMaxValue)
+					for b := 0; b <= colorMaxValue; b++ {
+						BColorMap = append(BColorMap, nearestColorBlock(Color{uint8(fR << (8 - colorBitDepth)), uint8(fG << (8 - colorBitDepth)), uint8(b << (8 - colorBitDepth))}))
+					}
 
-				mu.Lock()
-				GBColorMap[fG] = BColorMap
-				mu.Unlock()
+					mu.Lock()
+					GBColorMap[fG] = BColorMap
+					mu.Unlock()
 
-				wg.Done()
-			}(r, g)
+					wg.Done()
+				}(r, g)
+			}
+			wg.Wait()
+			GB := [][]string{}
+			for i := 0; i < len(GBColorMap); i++ {
+				GB = append(GB, GBColorMap[i])
+			}
+			colorMap = append(colorMap, GB)
 		}
-		wg.Wait()
-		GB := [][]string{}
-		for i := 0; i < len(GBColorMap); i++ {
-			GB = append(GB, GBColorMap[i])
-		}
-		colorMap = append(colorMap, GB)
+		fmt.Printf("\ncolor mapping duration: %s\n", time.Since(color_start))
+	} else {
+		fmt.Printf("\n\nDon't use color map.\n\n")
 	}
 
 	switch generateSource {
@@ -230,7 +237,7 @@ func main() {
 		defer f.Close()
 
 		for _, pixel := range parseImage(f) {
-			blockId := colorMap[pixel.color.r>>uint8(8-colorBitDepth)][pixel.color.g>>uint8(8-colorBitDepth)][pixel.color.b>>uint8(8-colorBitDepth)]
+			blockId := getBlock(pixel.color)
 
 			args = append(args, CommandArgument{
 				color:   pixel.color,
@@ -301,7 +308,7 @@ func main() {
 				usedBlocks := map[string]int{}
 
 				for _, pixel := range parseImage(&buf) {
-					blockId := colorMap[pixel.color.r>>uint8(8-colorBitDepth)][pixel.color.g>>uint8(8-colorBitDepth)][pixel.color.b>>uint8(8-colorBitDepth)]
+					blockId := getBlock(pixel.color)
 
 					args = append(args, CommandArgument{
 						color:   pixel.color,

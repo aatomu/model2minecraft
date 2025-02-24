@@ -225,12 +225,11 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 			textureY = texturePoint[1].Mod(NewFrac(1, 1)).Float()
 		}
 		textureIndexY := int(textureY * float64(len(texture[textureIndexX])))
-		textureColor := texture[textureIndexX][textureIndexY]
-		// blockId := nearestColorBlock(textureColor, blockColor)
-		blockId := colorMap[textureColor.r>>uint8(8-colorBitDepth)][textureColor.g>>uint8(8-colorBitDepth)][textureColor.b>>uint8(8-colorBitDepth)]
+		texturePixel := texture[textureIndexX][textureIndexY]
+		blockId := getBlock(texturePixel)
 
 		args = append(args, CommandArgument{
-			color:   textureColor,
+			color:   texturePixel,
 			blockId: blockId,
 			x:       x,
 			y:       y,
