@@ -6,8 +6,8 @@ import (
 )
 
 type pixel struct {
-	c    Color
-	x, y float64
+	color Color
+	x, y  float64
 }
 
 func parseImage(f io.Reader) (p []pixel) {
@@ -18,7 +18,7 @@ func parseImage(f io.Reader) (p []pixel) {
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			r, g, b, _ := img.At(x, y).RGBA()
 			p = append(p, pixel{
-				c: Color{
+				color: Color{
 					r: uint8(r >> 8),
 					g: uint8(g >> 8),
 					b: uint8(b >> 8),

@@ -13,7 +13,13 @@ import (
 	"strings"
 )
 
-type Command func(rgb Color, x, y, z float64, blockId string) (cmd string)
+type Command func(arg CommandArgument) (cmd string)
+
+type CommandArgument struct {
+	color   Color
+	blockId string
+	x, y, z float64
+}
 
 // 0..255 RGB color
 type Color struct {
@@ -152,16 +158,19 @@ func blockFilter(blockModelList map[string]string) (blockColor map[string]Color)
 	return
 }
 
-func CommandToMCfunction(commands []string, filePrefix string, maxChain int) (funcs []string, count int) {
-	results := removeDupe(commands)
-	count = len(results)
+func CommandToMCfunction(args []CommandArgument, filePrefix string, maxChain int) (funcs []string, count int) {
+	result := removeDupeArgument(args)
+	count = len(result)
 
 	funcs = []string{}
-	for i := 1; i <= (len(results)/maxChain)+1; i++ {
-		cmd := strings.Join(results[(i-1)*maxChain:Min(i*maxChain, len(results))], "\n")
+	for i := 1; i <= (len(result)/maxChain)+1; i++ {
+		var builder strings.Builder
+		for _, arg := range result[(i-1)*maxChain : Min(i*maxChain, len(result))] {
+			builder.WriteString(generator(arg) + "\n")
+		}
 		name := fmt.Sprintf("%s%04d", filePrefix, i)
 		funcs = append(funcs, name)
-		os.WriteFile(filepath.Join("./output", name+".mcfunction"), []byte(cmd), 0777)
+		os.WriteFile(filepath.Join("./output", name+".mcfunction"), []byte(builder.String()), 0777)
 	}
 
 	return

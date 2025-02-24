@@ -134,7 +134,7 @@ func calcDistance(Xa, Ya, Za, Xb, Yb, Zb Frac) Frac {
 	return Xab.Add(Yab).Add(Zab).Sqrt()
 }
 
-func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2]Frac, texture [][]Color, blockColor map[string]Color) (step Frac, min [3]float64, max [3]float64, commands []string, usedBlock map[string]int) {
+func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2]Frac, texture [][]Color) (step Frac, min [3]float64, max [3]float64, args []CommandArgument, usedBlock map[string]int) {
 	// Get surface polygon top
 	polygonPaIndex, _ := strconv.Atoi(strings.Split(indexes[0], "/")[0])
 	polygonPbIndex, _ := strconv.Atoi(strings.Split(indexes[1], "/")[0])
@@ -190,11 +190,22 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 	wg.Wait()
 
 	usedBlock = map[string]int{}
+	const threshold = 1e-10
+
 	for i := 0; i < len(polygonPoints); i++ {
 		polygonPoint := polygonPoints[i]
 		x := math.Round(polygonPoint[0].Div(objectSpacing).Float()) * objectSpacing.Float()
+		if math.Abs(x) < threshold {
+			x = 0
+		}
 		y := math.Round(polygonPoint[1].Div(objectSpacing).Float()) * objectSpacing.Float()
+		if math.Abs(y) < threshold {
+			y = 0
+		}
 		z := math.Round(polygonPoint[2].Div(objectSpacing).Float()) * objectSpacing.Float()
+		if math.Abs(z) < threshold {
+			z = 0
+		}
 
 		// Image position mapping
 		//  Golang:   | Obj:
@@ -215,13 +226,20 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 		}
 		textureIndexY := int(textureY * float64(len(texture[textureIndexX])))
 		textureColor := texture[textureIndexX][textureIndexY]
-		blockId := nearestColorBlock(textureColor, blockColor)
+		// blockId := nearestColorBlock(textureColor, blockColor)
+		blockId := colorMap[textureColor.r>>uint8(8-colorBitDepth)][textureColor.g>>uint8(8-colorBitDepth)][textureColor.b>>uint8(8-colorBitDepth)]
 
-		commands = append(commands, generator(textureColor, x, y, z, blockId))
+		args = append(args, CommandArgument{
+			color:   textureColor,
+			blockId: blockId,
+			x:       x,
+			y:       y,
+			z:       z,
+		})
 		usedBlock[blockId] = usedBlock[blockId] + 1
 	}
 
-	commands = removeDupe(commands)
+	args = removeDupeArgument(args)
 
 	return
 }

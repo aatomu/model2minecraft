@@ -19,10 +19,11 @@ import (
 // Configuration Area
 var (
 	// output config
-	generateSource Source  = Video
+	generateSource Source  = Object
 	chain          int     = 700000
-	generator      Command = func(rgb Color, x, y, z float64, blockId string) (cmd string) {
-		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", x, y, z, blockId)
+	colorBitDepth          = 4 // 1..8
+	generator      Command = func(arg CommandArgument) (cmd string) {
+		return fmt.Sprintf("setblock ~%.12f ~%.12f ~%.12f %s", arg.x, arg.x, arg.z, arg.blockId)
 		// return fmt.Sprintf("particle dust{color:[%ff,%ff,%ff],scale:0.2f} ~%.2f ~%.2f ~%.2f 0 0 0 0 1 force @a", float64(rgb.r)/255, float64(rgb.g)/255, float64(rgb.b)/255, x, y, z)
 	}
 	isCountBlock bool = false
@@ -31,7 +32,7 @@ var (
 	objectFile         = "HatsuneMiku.obj"
 	objectScale        = NewFrac(9, 5)
 	objectSpacing      = NewFrac(1, 1)
-	objectIsUVYAxisUp  = false
+	objectIsUVYAxisUp  = true
 	objectCalcParallel = 500
 	// example.png
 	imageFile = "../develop/assets/cbw32.png"
@@ -41,8 +42,8 @@ var (
 	videoScale     = "200:-1" // ffmpeg rescale argument
 	// minecraft config
 	minecraftRoot = "./minecraft"
-	acceptBlockId = []string{""}                                                    //allowed regexp
-	ignoreBlockId = []string{"powder", "sand", "gravel", "glass", "spawner", "ice"} //allowed regexp
+	acceptBlockId = []string{""}                                                       //allowed regexp
+	ignoreBlockId = []string{"powder$", "sand$", "gravel$", "glass", "spawner", "ice"} //allowed regexp
 )
 
 // Supported file format
@@ -54,6 +55,21 @@ const (
 	Video                // Supported .mp4
 )
 
+// compute variables
+var (
+	// Parallel
+	wg             sync.WaitGroup
+	wgCurrentCount int
+	wgTotalRoutine int
+	wgSession      chan struct{} = make(chan struct{}, objectCalcParallel)
+	mu             sync.Mutex
+	// Color
+	colorMap [][][]string
+	// minecraft
+	argumentList   [][]CommandArgument // [index][]command{}
+	totalUsedBlock map[string]int      = make(map[string]int)
+)
+
 func main() {
 	start := time.Now()
 	// minecraft block
@@ -63,17 +79,36 @@ func main() {
 	blockColor := blockFilter(blockModelList)
 	fmt.Printf("\nBlock parse duration: %s\n", time.Since(block_start))
 
-	// [index][]command:string{}
-	generatedCommand := [][]string{}
+	// block color to color mapping
+	fmt.Printf("\n%dBit color mapping start...\n", colorBitDepth)
+	colorMaxValue := 0xff >> (8 - colorBitDepth)
+	colorMap = make([][][]string, 0, colorMaxValue*colorMaxValue*colorMaxValue)
+	for r := 0; r <= colorMaxValue; r++ {
+		// GBColorMap := make([][]string, 0, m*m)
+		GBColorMap := map[int][]string{}
+		for g := 0; g <= colorMaxValue; g++ {
+			wg.Add(1)
+			go func(fR, fG int) {
+				BColorMap := make([]string, 0, colorMaxValue)
+				for b := 0; b <= colorMaxValue; b++ {
+					log.Println(r, g, b)
+					BColorMap = append(BColorMap, nearestColorBlock(Color{uint8(fR << (8 - colorBitDepth)), uint8(fG << (8 - colorBitDepth)), uint8(b << (8 - colorBitDepth))}, blockColor))
+				}
 
-	totalUsedBlock := map[string]int{}
+				mu.Lock()
+				GBColorMap[fG] = BColorMap
+				mu.Unlock()
 
-	// Parallel
-	var wg sync.WaitGroup
-	var wgCurrentCount = 0
-	var wgTotalRoutine = 0
-	var wgSession = make(chan struct{}, objectCalcParallel)
-	var mu sync.Mutex
+				wg.Done()
+			}(r, g)
+		}
+		wg.Wait()
+		GB := [][]string{}
+		for i := 0; i < len(GBColorMap); i++ {
+			GB = append(GB, GBColorMap[i])
+		}
+		colorMap = append(colorMap, GB)
+	}
 
 	switch generateSource {
 	case Object:
@@ -93,7 +128,7 @@ func main() {
 		textureVectors := [][2]Frac{}
 		currentTexture := ""
 		// command
-		command := []string{}
+		args := []CommandArgument{}
 
 		for ln, line := range strings.Split(string(obj), "\n") {
 			cmd := strings.SplitN(line, " ", 2)
@@ -148,7 +183,7 @@ func main() {
 							wgCurrentCount--
 						}()
 
-						step, surfaceMin, surfaceMax, commands, usedBlocks := calcSurface(fIndexes, fPolygonVectors, fTextureVectors, fTexture, fBlockColor)
+						step, surfaceMin, surfaceMax, generatedArgs, usedBlocks := calcSurface(fIndexes, fPolygonVectors, fTextureVectors, fTexture)
 
 						prefix := fmt.Sprintf("Face L%d: f %s", fLn, fData)
 						fmt.Printf("% -60s Step:%f Now:%s Parallel(running/total):%d/%d\n", prefix, step.Float(), time.Since(fObj_start), wgCurrentCount, wgTotalRoutine)
@@ -160,7 +195,7 @@ func main() {
 						max[0] = math.Max(max[0], surfaceMax[0])
 						max[1] = math.Max(max[1], surfaceMax[1])
 						max[2] = math.Max(max[2], surfaceMax[2])
-						command = append(command, commands...)
+						args = append(args, generatedArgs...)
 						for id, count := range usedBlocks {
 							totalUsedBlock[id] = totalUsedBlock[id] + count
 						}
@@ -177,14 +212,14 @@ func main() {
 
 		fmt.Printf("\nDuration: %s, Point:%d Face:%d\n", time.Since(start), len(polygonVectors), face)
 		fmt.Printf("Min:[%.2f,%.2f,%.2f] Max:[%.2f,%.2f,%.2f] H:%.2f W:%.2f D:%.2f\n", min[0], min[1], min[2], max[0], max[1], max[2], max[0]-min[0], max[1]-min[1], max[2]-min[2])
-		generatedCommand = append(generatedCommand, command)
+		argumentList = append(argumentList, args)
 
 	case Image:
 		image_start := time.Now()
 		fmt.Printf("\nImage parse start...\n")
 
 		// command
-		command := []string{}
+		args := []CommandArgument{}
 
 		var W, H float64
 
@@ -194,18 +229,25 @@ func main() {
 		}
 		defer f.Close()
 
-		for _, p := range parseImage(f) {
-			blockId := nearestColorBlock(p.c, blockColor)
+		for _, pixel := range parseImage(f) {
+			blockId := colorMap[pixel.color.r>>uint8(8-colorBitDepth)][pixel.color.g>>uint8(8-colorBitDepth)][pixel.color.b>>uint8(8-colorBitDepth)]
 
-			command = append(command, generator(p.c, p.x, p.y, 0.0, blockId))
-			W = math.Max(W, p.x)
-			H = math.Max(H, p.y)
+			args = append(args, CommandArgument{
+				color:   pixel.color,
+				blockId: blockId,
+				x:       pixel.x,
+				y:       pixel.y,
+				z:       0.0,
+			})
+
+			W = math.Max(W, pixel.x)
+			H = math.Max(H, pixel.y)
 			totalUsedBlock[blockId] = totalUsedBlock[blockId] + 1
 		}
 		fmt.Printf("\nImage parse duration: %s\n", time.Since(image_start))
 
 		fmt.Printf("\nDuration: %s W:%d W:%d\n", time.Since(start), int(W), int(H))
-		generatedCommand = append(generatedCommand, command)
+		argumentList = append(argumentList, args)
 
 	case Video:
 		video_start := time.Now()
@@ -231,7 +273,7 @@ func main() {
 		fmt.Printf("\nFrame to function start...\n")
 		var W, H float64
 		var frame = 0
-		var frameData = map[int][]string{}
+		var frameData = map[int][]CommandArgument{}
 		for current := 0.0; current < duration; current += 1.0 / float64(frameRate) {
 			frame++
 
@@ -255,21 +297,26 @@ func main() {
 				execute.Run()
 
 				// command
-				command := []string{}
+				args := []CommandArgument{}
 				usedBlocks := map[string]int{}
 
-				for _, p := range parseImage(&buf) {
-					blockId := nearestColorBlock(p.c, blockColor)
+				for _, pixel := range parseImage(&buf) {
+					blockId := colorMap[pixel.color.r>>uint8(8-colorBitDepth)][pixel.color.g>>uint8(8-colorBitDepth)][pixel.color.b>>uint8(8-colorBitDepth)]
 
-					command = append(command, generator(p.c, p.x, p.y, 0.0, blockId))
-
-					W = math.Max(W, p.x)
-					H = math.Max(H, p.y)
+					args = append(args, CommandArgument{
+						color:   pixel.color,
+						blockId: blockId,
+						x:       pixel.x,
+						y:       pixel.y,
+						z:       0.0,
+					})
+					W = math.Max(W, pixel.x)
+					H = math.Max(H, pixel.y)
 					usedBlocks[blockId] = usedBlocks[blockId] + 1
 				}
 
 				mu.Lock()
-				frameData[fFrame] = command
+				frameData[fFrame] = args
 				for id, count := range usedBlocks {
 					totalUsedBlock[id] = totalUsedBlock[id] + count
 				}
@@ -280,19 +327,19 @@ func main() {
 		}
 		wg.Wait()
 		for i := 1; i < len(frameData); i++ {
-			generatedCommand = append(generatedCommand, frameData[i])
+			argumentList = append(argumentList, frameData[i])
 		}
 
 		fmt.Printf("\nFrame to function duration: %s\n", time.Since(video_start))
 
-		fmt.Printf("\nDuration: %s, Frame: %d, W: %d, H: %d,\n", time.Since(start), len(generatedCommand), int(W), int(H))
+		fmt.Printf("\nDuration: %s, Frame: %d, W: %d, H: %d,\n", time.Since(start), len(argumentList), int(W), int(H))
 	}
 
 	fmt.Printf("\nCreate function...\n")
 	create_start := time.Now()
 	var totalFunctions, totalCommand int
-	for i, command := range generatedCommand {
-		functions, commandCount := CommandToMCfunction(command, fmt.Sprintf("f%04d-i", i), chain)
+	for i, args := range argumentList {
+		functions, commandCount := CommandToMCfunction(args, fmt.Sprintf("f%04d-i", i), chain)
 		totalFunctions += len(functions)
 		totalCommand += commandCount
 
