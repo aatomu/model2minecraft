@@ -163,14 +163,20 @@ func CommandToMCfunction(args []CommandArgument, filePrefix string, maxChain int
 	count = len(result)
 
 	funcs = []string{}
-	for i := 1; i <= (len(result)/maxChain)+1; i++ {
+	for i := 0; i <= (len(result)/maxChain-1)/maxChain; i++ {
 		var builder strings.Builder
-		for _, arg := range result[(i-1)*maxChain : Min(i*maxChain, len(result))] {
-			builder.WriteString(generator(arg) + "\n")
+		start := i * maxChain
+		end := Min((i+1)*maxChain, len(result))
+		for _, arg := range result[start:end] {
+			builder.WriteString(generator(arg))
+			builder.WriteString("\n")
 		}
-		name := fmt.Sprintf("%s%04d", filePrefix, i)
+		name := fmt.Sprintf("%s%04d", filePrefix, i+1)
 		funcs = append(funcs, name)
-		os.WriteFile(filepath.Join("./output", name+".mcfunction"), []byte(builder.String()), 0777)
+		err := os.WriteFile(filepath.Join("./output", name+".mcfunction"), []byte(builder.String()), 0777)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	return

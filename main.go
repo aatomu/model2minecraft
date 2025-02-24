@@ -23,7 +23,7 @@ var (
 	chain          int     = 700000
 	colorBitDepth          = 4 // 1..8
 	generator      Command = func(arg CommandArgument) (cmd string) {
-		return fmt.Sprintf("setblock ~%.12f ~%.12f ~%.12f %s", arg.x, arg.x, arg.z, arg.blockId)
+		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", arg.x, arg.x, arg.z, arg.blockId)
 		// return fmt.Sprintf("particle dust{color:[%ff,%ff,%ff],scale:0.2f} ~%.2f ~%.2f ~%.2f 0 0 0 0 1 force @a", float64(rgb.r)/255, float64(rgb.g)/255, float64(rgb.b)/255, x, y, z)
 	}
 	isCountBlock bool = false
@@ -84,6 +84,7 @@ func main() {
 	colorMaxValue := 0xff >> (8 - colorBitDepth)
 	colorMap = make([][][]string, 0, colorMaxValue*colorMaxValue*colorMaxValue)
 	for r := 0; r <= colorMaxValue; r++ {
+		fmt.Printf("Calc R: %d/%d, G: 0..%d, B:0..%d \n", r, colorMaxValue, colorMaxValue, colorMaxValue)
 		// GBColorMap := make([][]string, 0, m*m)
 		GBColorMap := map[int][]string{}
 		for g := 0; g <= colorMaxValue; g++ {
@@ -91,7 +92,6 @@ func main() {
 			go func(fR, fG int) {
 				BColorMap := make([]string, 0, colorMaxValue)
 				for b := 0; b <= colorMaxValue; b++ {
-					log.Println(r, g, b)
 					BColorMap = append(BColorMap, nearestColorBlock(Color{uint8(fR << (8 - colorBitDepth)), uint8(fG << (8 - colorBitDepth)), uint8(b << (8 - colorBitDepth))}, blockColor))
 				}
 
@@ -339,7 +339,7 @@ func main() {
 	create_start := time.Now()
 	var totalFunctions, totalCommand int
 	for i, args := range argumentList {
-		functions, commandCount := CommandToMCfunction(args, fmt.Sprintf("f%04d-i", i), chain)
+		functions, commandCount := CommandToMCfunction(args, fmt.Sprintf("f%04d-i", i+1), chain)
 		totalFunctions += len(functions)
 		totalCommand += commandCount
 
@@ -375,7 +375,41 @@ func main() {
 	fmt.Printf("\nFinished program: %s\n", time.Since(start))
 }
 
-func removeDupe(in []string) []string {
-	slices.Sort(in)
-	return slices.Compact(in)
+func removeDupeArgument(in []CommandArgument) []CommandArgument {
+	tmp := make([]CommandArgument, len(in))
+	copy(tmp, in)
+
+	slices.SortStableFunc(tmp, func(a, b CommandArgument) int {
+		// sort by position
+		if cmp := floatCompare(a.x, b.x); cmp != 0 {
+			return cmp
+		}
+		if cmp := floatCompare(a.y, b.y); cmp != 0 {
+			return cmp
+		}
+		if cmp := floatCompare(a.z, b.z); cmp != 0 {
+			return cmp
+		}
+		return 0
+	})
+
+	return slices.CompactFunc(tmp, func(a, b CommandArgument) bool {
+		return floatEqual(a.x, b.x) && floatEqual(a.y, b.y) && floatEqual(a.z, b.z)
+	})
+}
+
+func floatCompare(a, b float64) int {
+	if floatEqual(a, b) {
+		return 0
+	}
+	if a < b {
+		return -1
+	}
+	return 1
+}
+
+func floatEqual(a, b float64) bool {
+	const threshold = 1e-6
+
+	return math.Abs(a-b) < threshold
 }
