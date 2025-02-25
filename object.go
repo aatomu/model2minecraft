@@ -9,63 +9,85 @@ import (
 
 func getStep(Pa, Pb, Pc [3]Frac, spacing Frac) (step Frac) {
 	var lambdaA, lambdaB, lambdaC Frac
-	step = NewFrac(1, 1)
+
+	var half = NewFrac(1, 2)
+	var minStepValue = NewFrac(0, 1)
+	var maxStepValue = NewFrac(1, 1)
+	const threshold float64 = 1e-5
 
 	// lambdaA=0(C=>B)
+	lambdaA = NewFrac(0, 1)
+	lambdaB = NewFrac(0, 1)
+	lambdaC = NewFrac(1, 1).Sub(lambdaA).Sub(lambdaB)
+	Xa, Ya, Za := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+
 	for {
-		lambdaA = NewFrac(0, 1)
-		lambdaB = NewFrac(0, 1)
-		lambdaC = NewFrac(1, 1).Sub(lambdaA).Sub(lambdaB)
-		Xa, Ya, Za := getPoint(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+		step = minStepValue.Add(maxStepValue).Mul(half)
 
 		lambdaB = step
 		lambdaC = NewFrac(1, 1).Sub(lambdaA).Sub(lambdaB)
-		Xb, Yb, Zb := getPoint(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+		Xb, Yb, Zb := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
 
 		V := calcDistance(Xa, Ya, Za, Xb, Yb, Zb)
 		if V.Sub(spacing).Float() > 0 {
-			step = step.Mul(NewFrac(2, 3))
-			continue
+			maxStepValue = step
+		} else {
+			minStepValue = step
 		}
-		break
+
+		if maxStepValue.Sub(minStepValue).Float() < threshold {
+			break
+		}
 	}
 
 	// lambdaB=0(A=>C)
+	lambdaB = NewFrac(0, 1)
+	lambdaC = NewFrac(0, 1)
+	lambdaA = NewFrac(1, 1).Sub(lambdaB).Sub(lambdaC)
+	Xa, Ya, Za = weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+
 	for {
-		lambdaB = NewFrac(0, 1)
-		lambdaC = NewFrac(0, 1)
-		lambdaA = NewFrac(1, 1).Sub(lambdaB).Sub(lambdaC)
-		Xa, Ya, Za := getPoint(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+		step = minStepValue.Add(maxStepValue).Mul(half)
 
 		lambdaC = step
 		lambdaA = NewFrac(1, 1).Sub(lambdaB).Sub(lambdaC)
-		Xb, Yb, Zb := getPoint(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+		Xb, Yb, Zb := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
 
 		V := calcDistance(Xa, Ya, Za, Xb, Yb, Zb)
 		if V.Sub(spacing).Float() > 0 {
-			step = step.Mul(NewFrac(2, 3))
-			continue
+			maxStepValue = step
+		} else {
+			minStepValue = step
 		}
-		break
+
+		if maxStepValue.Sub(minStepValue).Float() < threshold {
+			break
+		}
 	}
 
 	// lambdaC=0(B=>A)
+	lambdaC = NewFrac(0, 1)
+	lambdaA = NewFrac(0, 1)
+	lambdaB = NewFrac(1, 1).Sub(lambdaC).Sub(lambdaA)
+	Xa, Ya, Za = weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+
 	for {
-		lambdaC = NewFrac(0, 1)
-		lambdaA = NewFrac(0, 1)
-		lambdaB = NewFrac(1, 1).Sub(lambdaC).Sub(lambdaA)
-		Xa, Ya, Za := getPoint(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+		step = minStepValue.Add(maxStepValue).Mul(half)
 
 		lambdaA = step
 		lambdaB = NewFrac(1, 1).Sub(lambdaC).Sub(lambdaA)
-		Xb, Yb, Zb := getPoint(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+		Xb, Yb, Zb := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
 
 		V := calcDistance(Xa, Ya, Za, Xb, Yb, Zb)
 		if V.Sub(spacing).Float() > 0 {
-			step = step.Mul(NewFrac(2, 3))
-			continue
+			maxStepValue = step
+		} else {
+			minStepValue = step
 		}
-		break
+
+		if maxStepValue.Sub(minStepValue).Float() < threshold {
+			break
+		}
 	}
 
 	return
@@ -83,7 +105,7 @@ func getPolygonPoints(step Frac, Pa, Pb, Pc [3]Frac) (points [][3]Frac) {
 		lambdaB = NewFrac(0, 1)
 		for lambdaA.Add(lambdaB).Float() <= 1 {
 			lambdaC = NewFrac(1, 1).Sub(lambdaA).Sub(lambdaB)
-			x, y, z := getPoint(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
+			x, y, z := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
 
 			points = append(points, [3]Frac{x, y, z})
 
@@ -120,7 +142,7 @@ func getTexturePoints(step Frac, Pa, Pb, Pc [2]Frac) (points [][2]Frac) {
 	return
 }
 
-func getPoint(Pa, Pb, Pc [3]Frac, lambdaA, lambdaB, lambdaC Frac) (x, y, z Frac) {
+func weightedPoint3D(Pa, Pb, Pc [3]Frac, lambdaA, lambdaB, lambdaC Frac) (x, y, z Frac) {
 	x = Pa[0].Mul(lambdaA).Add(Pb[0].Mul(lambdaB)).Add(Pc[0].Mul(lambdaC))
 	y = Pa[1].Mul(lambdaA).Add(Pb[1].Mul(lambdaB)).Add(Pc[1].Mul(lambdaC))
 	z = Pa[2].Mul(lambdaA).Add(Pb[2].Mul(lambdaB)).Add(Pc[2].Mul(lambdaC))
@@ -128,10 +150,10 @@ func getPoint(Pa, Pb, Pc [3]Frac, lambdaA, lambdaB, lambdaC Frac) (x, y, z Frac)
 }
 
 func calcDistance(Xa, Ya, Za, Xb, Yb, Zb Frac) Frac {
-	Xab := Xa.Sub(Xb).Pow(2)
-	Yab := Ya.Sub(Yb).Pow(2)
-	Zab := Za.Sub(Zb).Pow(2)
-	return Xab.Add(Yab).Add(Zab).Sqrt()
+	Xab := Xa.Sub(Xb).Pow2()
+	Yab := Ya.Sub(Yb).Pow2()
+	Zab := Za.Sub(Zb).Pow2()
+	return Xab.Add(Yab).Add(Zab)
 }
 
 func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2]Frac, texture [][]Color) (step Frac, min [3]float64, max [3]float64, args []CommandArgument, usedBlock map[string]int) {

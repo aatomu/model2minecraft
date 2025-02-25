@@ -79,25 +79,10 @@ func (f Frac) Mod(n Frac) Frac {
 	return Frac{Top: top, Bottom: bottom}.approx()
 }
 
-func (f Frac) Pow(n int64) Frac {
-	if n < 0 {
-		return Frac{Top: f.Bottom, Bottom: f.Top}.Pow(-n)
-	}
-
-	top := new(big.Int).Exp(f.Top, big.NewInt(n), nil)
-	bottom := new(big.Int).Exp(f.Bottom, big.NewInt(n), nil)
+func (f Frac) Pow2() Frac {
+	top := new(big.Int).Mul(f.Top, f.Top)
+	bottom := new(big.Int).Mul(f.Bottom, f.Bottom)
 	return Frac{Top: top, Bottom: bottom}.approx()
-}
-
-func (f Frac) Sqrt() Frac {
-	top := new(big.Int).Sqrt(f.Top)
-	bottom := new(big.Int).Sqrt(f.Bottom)
-
-	// 完全平方
-	if new(big.Int).Mul(top, top).Cmp(f.Top) == 0 && new(big.Int).Mul(bottom, bottom).Cmp(f.Bottom) == 0 {
-		return Frac{Top: top, Bottom: bottom}
-	}
-	return Float2Frac(math.Sqrt(f.Float()))
 }
 
 func (f Frac) String() string {
