@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"math"
 	"slices"
 )
@@ -11,60 +12,33 @@ func getBlock(target Color) (blockID string) {
 	}
 	return nearestColorBlock(target)
 }
+
 func nearestColorBlock(target Color) (blockID string) {
-	type Distance struct {
-		blockID string
-		d       float64
-	}
-	distance := []Distance{}
-	for blockID, color := range blockColor {
+	blockList := maps.Keys(blockColor)
+
+	var distance float64 = math.MaxFloat64
+	for _, id := range slices.Sorted(blockList) {
 		// // RGB
-		// distance = append(distance, Distance{
-		// 	blockID: blockID,
-		// 	d:       RGBDistance(color, target),
-		// })
-
+		// d := RGBDistance(blockColor[id], target)
 		// // HLS
-		// distance = append(distance, Distance{
-		// 	blockID: blockID,
-		// 	d:       HSLDistance(color, target),
-		// })
-
+		// d := HSLDistance(blockColor[id], target)
 		// Lab
-		distance = append(distance, Distance{
-			blockID: blockID,
-			d:       LabDistance(color, target),
-		})
+		d := LabDistance(blockColor[id], target)
 
+		if d < distance {
+			blockID = id
+			distance = d
+		}
 	}
 
-	slices.SortFunc(distance, func(a, b Distance) int {
-		// Sort by distance
-		if a.d < b.d {
-			return -1
-		}
-		if a.d > b.d {
-			return 1
-		}
-		// Sort by blockID (dictionary sort)
-		if a.blockID < b.blockID {
-			return -1
-		}
-		if a.blockID > b.blockID {
-			return 1
-		}
-
-		return 0
-	})
-
-	return distance[0].blockID
+	return
 }
 
 func RGBDistance(a, b Color) float64 {
 	red := math.Pow(float64(a.r-b.r), 2)
 	green := math.Pow(float64(a.g-b.g), 2)
 	blue := math.Pow(float64(a.b-b.b), 2)
-	return math.Sqrt(red + green + blue)
+	return red + green + blue
 }
 
 func rgbToHSL(r, g, b uint8) (h, s, l float64) {
@@ -123,7 +97,7 @@ func HSLDistance(a, b Color) float64 {
 	// Calc euclidean distance
 	ds := Sa - Sb
 	dl := La - Lb
-	return math.Sqrt(dh*dh + ds*ds + dl*dl)
+	return dh*dh + ds*ds + dl*dl
 }
 
 func rgbToLab(rgb Color) (float64, float64, float64) {
@@ -167,5 +141,5 @@ func LabDistance(a, b Color) float64 {
 	dL := math.Pow(La-Lb, 2)
 	dA := math.Pow(Aa-Ab, 2)
 	dB := math.Pow(Ba-Bb, 2)
-	return math.Sqrt(dL + dA + dB)
+	return dL + dA + dB
 }
