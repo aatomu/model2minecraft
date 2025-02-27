@@ -7,7 +7,6 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,14 +17,23 @@ import (
 type Command func(arg CommandArgument) (cmd string)
 
 type CommandArgument struct {
-	color   Color
-	blockId string
+	color    Color
+	blockId  string
+	position Position
+}
+
+type Position struct {
 	x, y, z float64
 }
 
 type BlockModel struct {
 	namespace string
 	path      string
+}
+
+type Block struct {
+	id    string
+	color Color
 }
 
 // 0..255 RGB color
@@ -77,8 +85,8 @@ func scanBlockModel() (blockModelList map[string]BlockModel) {
 	return
 }
 
-func blockFilter(blockModelList map[string]BlockModel) (blockColor map[string]Color) {
-	blockColor = map[string]Color{}
+func blockFilter(blockModelList map[string]BlockModel) (blockList []Block) {
+	blockList = []Block{}
 
 	type Model struct {
 		Parent   string            `json:"parent"`
@@ -142,16 +150,22 @@ func blockFilter(blockModelList map[string]BlockModel) (blockColor map[string]Co
 			}
 		}
 
-		blockColor[blockID] = Color{
-			r: uint8(red / pixel),
-			g: uint8(green / pixel),
-			b: uint8(blue / pixel),
-		}
+		blockList = append(blockList,
+			Block{
+				id: blockID,
+				color: Color{
+					r: uint8(red / pixel),
+					g: uint8(green / pixel),
+					b: uint8(blue / pixel),
+				},
+			})
 	}
 
-	blockList = slices.Sorted(maps.Keys(blockColor))
+	slices.SortFunc(blockList, func(a, b Block) int {
+		return strings.Compare(a.id, b.id)
+	})
 
-	fmt.Printf("All sides are same& name filtered block: %d\n", len(blockColor))
+	fmt.Printf("All sides are same& name filtered block: %d\n", len(blockList))
 	return
 }
 

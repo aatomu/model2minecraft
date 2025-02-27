@@ -17,16 +17,16 @@ func nearestColorBlock(target Color) (blockID string) {
 	}
 
 	var distance float64 = math.MaxFloat64
-	for _, id := range blockList {
+	for _, block := range blockList {
 		// RGB
-		d := RGBDistance(blockColor[id], target)
+		// d := RGBDistance(block.color, target)
 		// // HLS
 		// d := HSLDistance(blockColor[id], target)
 		// // Lab
-		// d := LabDistance(blockColor[id], target)
+		d := LabDistance(block.color, target)
 
 		if d < distance {
-			blockID = id
+			blockID = block.id
 			distance = d
 		}
 	}
@@ -36,11 +36,11 @@ func nearestColorBlock(target Color) (blockID string) {
 }
 
 func RGBDistance(a, b Color) float64 {
-	tmp := float64(a.r - b.r)
+	tmp := float64(a.r) - float64(b.r)
 	red := tmp * tmp
-	tmp = float64(a.g - b.g)
+	tmp = float64(a.g) - float64(b.g)
 	green := tmp * tmp
-	tmp = float64(a.b - b.b)
+	tmp = float64(a.b) - float64(b.b)
 	blue := tmp * tmp
 	return red + green + blue
 }

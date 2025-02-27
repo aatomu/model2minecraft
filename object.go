@@ -117,6 +117,7 @@ func calcSurface(indexes []string, polygonVectors [][3]float64, textureVectors [
 	usedBlock = map[string]int{}
 	const threshold = 1e-10
 
+	args = make([]CommandArgument, 0, len(polygonPoints))
 	for i := 0; i < len(polygonPoints); i++ {
 		polygonPoint := polygonPoints[i]
 		x := math.Round(polygonPoint[0]/objectGridSpacing) * objectGridSpacing
@@ -160,9 +161,11 @@ func calcSurface(indexes []string, polygonVectors [][3]float64, textureVectors [
 		args = append(args, CommandArgument{
 			color:   texturePixel,
 			blockId: blockId,
-			x:       x,
-			y:       y,
-			z:       z,
+			position: Position{
+				x: x,
+				y: y,
+				z: z,
+			},
 		})
 		usedBlock[blockId] = usedBlock[blockId] + 1
 	}

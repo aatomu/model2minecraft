@@ -23,7 +23,7 @@ var (
 	maxCommandChain  int     = 700000
 	colorDepthBit    int     = 8 // 1-8
 	commandGenerator Command = func(arg CommandArgument) (cmd string) {
-		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", arg.x, arg.y, arg.z, arg.blockId)
+		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", arg.position.x, arg.position.y, arg.position.z, arg.blockId)
 		// return fmt.Sprintf("particle dust{color:[%ff,%ff,%ff],scale:0.2f} ~%.2f ~%.2f ~%.2f 0 0 0 0 1 force @a", float64(rgb.r)/255, float64(rgb.g)/255, float64(rgb.b)/255, x, y, z)
 	}
 	enableBlockCount bool = false
@@ -68,8 +68,9 @@ var (
 	wgSession      chan struct{} = make(chan struct{}, parallelLimit)
 	mu             sync.Mutex
 	// Color
-	blockColor map[string]Color
+	blockList  []Block
 	colorMap   [][][]string // Color map use: colorBitDepth < 6
+	colorCache sync.Map     //map[Color]string
 	// Minecraft
 	argumentList   [][]CommandArgument // [index][]command{}
 	totalUsedBlock map[string]int      = make(map[string]int)
@@ -81,7 +82,7 @@ func main() {
 	block_start := time.Now()
 	fmt.Printf("\nBlock parse start...\n")
 	blockModelList := scanBlockModel()
-	blockColor = blockFilter(blockModelList)
+	blockList = blockFilter(blockModelList)
 	fmt.Printf("\nBlock parse duration: %s\n", time.Since(block_start))
 
 	// block color to color mapping
@@ -186,7 +187,7 @@ func main() {
 					wg.Add(1)
 					wgTotalRoutine++
 					wgCurrentCount++
-					go func(fLn int, fData string, fIndexes []string, fPolygonVectors [][3]float64, fTextureVectors [][2]float64, fTexture [][]Color, fBlockColor map[string]Color, fObj_start time.Time) {
+					go func(fLn int, fData string, fIndexes []string, fPolygonVectors [][3]float64, fTextureVectors [][2]float64, fTexture [][]Color, fBlockList []Block, fObj_start time.Time) {
 
 						defer func() {
 							<-wgSession
@@ -212,7 +213,7 @@ func main() {
 						}
 						face++
 						mu.Unlock()
-					}(ln, data, indexes, polygonVectors, textureVectors, material[currentTexture], blockColor, obj_start)
+					}(ln, data, indexes, polygonVectors, textureVectors, material[currentTexture], blockList, obj_start)
 				}
 			default:
 				fmt.Printf("Skip L%d: %s\n", ln, line)
@@ -246,9 +247,11 @@ func main() {
 			args = append(args, CommandArgument{
 				color:   pixel.color,
 				blockId: blockId,
-				x:       pixel.x,
-				y:       pixel.y,
-				z:       0.0,
+				position: Position{
+					x: pixel.x,
+					y: pixel.y,
+					z: 0.0,
+				},
 			})
 
 			W = math.Max(W, pixel.x)
@@ -317,9 +320,11 @@ func main() {
 					args = append(args, CommandArgument{
 						color:   pixel.color,
 						blockId: blockId,
-						x:       pixel.x,
-						y:       pixel.y,
-						z:       0.0,
+						position: Position{
+							x: pixel.x,
+							y: pixel.y,
+							z: 0.0,
+						},
 					})
 					W = math.Max(W, pixel.x)
 					H = math.Max(H, pixel.y)
@@ -387,26 +392,30 @@ func main() {
 }
 
 func removeDupeArgument(in []CommandArgument) []CommandArgument {
-	tmp := make([]CommandArgument, len(in))
-	copy(tmp, in)
+	check := make(map[Position]struct{}, len(in))
+	result := make([]CommandArgument, 0, len(in))
 
-	slices.SortFunc(tmp, func(a, b CommandArgument) int {
+	for _, arg := range in {
+		if _, ok := check[arg.position]; !ok {
+			check[arg.position] = struct{}{}
+			result = append(result, arg)
+		}
+	}
+
+	slices.SortFunc(result, func(a, b CommandArgument) int {
 		// sort by position
-		if cmp := floatCompare(a.x, b.x); cmp != 0 {
+		if cmp := floatCompare(a.position.y, b.position.y); cmp != 0 {
 			return cmp
 		}
-		if cmp := floatCompare(a.y, b.y); cmp != 0 {
+		if cmp := floatCompare(a.position.x, b.position.x); cmp != 0 {
 			return cmp
 		}
-		if cmp := floatCompare(a.z, b.z); cmp != 0 {
+		if cmp := floatCompare(a.position.z, b.position.z); cmp != 0 {
 			return cmp
 		}
 		return 0
 	})
-
-	return slices.CompactFunc(tmp, func(a, b CommandArgument) bool {
-		return floatEqual(a.x, b.x) && floatEqual(a.y, b.y) && floatEqual(a.z, b.z)
-	})
+	return result
 }
 
 func floatCompare(a, b float64) int {
