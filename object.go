@@ -7,156 +7,71 @@ import (
 	"sync"
 )
 
-func getStep(Pa, Pb, Pc [3]Frac, spacing Frac) (step Frac) {
-	var lambdaA, lambdaB, lambdaC Frac
-
-	var half = NewFrac(1, 2)
-	var minStepValue = NewFrac(0, 1)
-	var maxStepValue = NewFrac(1, 1)
-	const threshold float64 = 1e-5
-
-	// lambdaA=0(C=>B)
-	lambdaA = NewFrac(0, 1)
-	lambdaB = NewFrac(0, 1)
-	lambdaC = NewFrac(1, 1).Sub(lambdaA).Sub(lambdaB)
-	Xa, Ya, Za := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
-
-	for {
-		step = minStepValue.Add(maxStepValue).Mul(half)
-
-		lambdaB = step
-		lambdaC = NewFrac(1, 1).Sub(lambdaA).Sub(lambdaB)
-		Xb, Yb, Zb := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
-
-		V := calcDistance(Xa, Ya, Za, Xb, Yb, Zb)
-		if V.Sub(spacing).Float() > 0 {
-			maxStepValue = step
-		} else {
-			minStepValue = step
-		}
-
-		if maxStepValue.Sub(minStepValue).Float() < threshold {
-			break
-		}
+func getStep(Pa, Pb, Pc [3]float64, spacing float64) (step float64) {
+	Distance := func(Xa, Ya, Za, Xb, Yb, Zb float64) float64 {
+		Xab := (Xa - Xb) * (Xa - Xb)
+		Yab := (Ya - Yb) * (Ya - Yb)
+		Zab := (Za - Zb) * (Za - Zb)
+		return math.Sqrt(Xab + Yab + Zab)
 	}
 
-	// lambdaB=0(A=>C)
-	lambdaB = NewFrac(0, 1)
-	lambdaC = NewFrac(0, 1)
-	lambdaA = NewFrac(1, 1).Sub(lambdaB).Sub(lambdaC)
-	Xa, Ya, Za = weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
-
-	for {
-		step = minStepValue.Add(maxStepValue).Mul(half)
-
-		lambdaC = step
-		lambdaA = NewFrac(1, 1).Sub(lambdaB).Sub(lambdaC)
-		Xb, Yb, Zb := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
-
-		V := calcDistance(Xa, Ya, Za, Xb, Yb, Zb)
-		if V.Sub(spacing).Float() > 0 {
-			maxStepValue = step
-		} else {
-			minStepValue = step
-		}
-
-		if maxStepValue.Sub(minStepValue).Float() < threshold {
-			break
-		}
-	}
-
-	// lambdaC=0(B=>A)
-	lambdaC = NewFrac(0, 1)
-	lambdaA = NewFrac(0, 1)
-	lambdaB = NewFrac(1, 1).Sub(lambdaC).Sub(lambdaA)
-	Xa, Ya, Za = weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
-
-	for {
-		step = minStepValue.Add(maxStepValue).Mul(half)
-
-		lambdaA = step
-		lambdaB = NewFrac(1, 1).Sub(lambdaC).Sub(lambdaA)
-		Xb, Yb, Zb := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
-
-		V := calcDistance(Xa, Ya, Za, Xb, Yb, Zb)
-		if V.Sub(spacing).Float() > 0 {
-			maxStepValue = step
-		} else {
-			minStepValue = step
-		}
-
-		if maxStepValue.Sub(minStepValue).Float() < threshold {
-			break
-		}
-	}
-
+	Vab := Distance(Pa[0], Pa[1], Pa[2], Pb[0], Pb[1], Pb[2])
+	Vbc := Distance(Pb[0], Pb[1], Pb[2], Pc[0], Pc[1], Pc[2])
+	Vca := Distance(Pc[0], Pc[1], Pc[2], Pa[0], Pa[1], Pa[2])
+	Vmax := math.Max(math.Max(Vab, Vbc), Vca)
+	step = spacing / Vmax
 	return
 }
 
-func getPolygonPoints(step Frac, Pa, Pb, Pc [3]Frac) (points [][3]Frac) {
+func getPolygonPoints(step float64, Pa, Pb, Pc [3]float64) (points [][3]float64) {
 	// allocate slice capacity
-	lambdaRange := int(1 / step.Float())
-	points = make([][3]Frac, 0, lambdaRange*lambdaRange)
+	points = make([][3]float64, 0, int(1/step)*int(1/step))
 
-	var lambdaA, lambdaB, lambdaC Frac
+	var lambdaA, lambdaB, lambdaC float64
 
-	lambdaA = NewFrac(0, 1)
-	for lambdaA.Float() <= 1 {
-		lambdaB = NewFrac(0, 1)
-		for lambdaA.Add(lambdaB).Float() <= 1 {
-			lambdaC = NewFrac(1, 1).Sub(lambdaA).Sub(lambdaB)
+	for mulLambdaA := 0.0; mulLambdaA*step <= 1; mulLambdaA++ {
+		for mulLambdaB := 0.0; (mulLambdaA+mulLambdaB)*step <= 1; mulLambdaB++ {
+			lambdaA = mulLambdaA * step
+			lambdaB = mulLambdaB * step
+			lambdaC = 1.0 - lambdaA - lambdaB
 			x, y, z := weightedPoint3D(Pa, Pb, Pc, lambdaA, lambdaB, lambdaC)
 
-			points = append(points, [3]Frac{x, y, z})
-
-			lambdaB = lambdaB.Add(step)
+			points = append(points, [3]float64{x, y, z})
 		}
-		lambdaA = lambdaA.Add(step)
 	}
 
 	return
 }
 
-func getTexturePoints(step Frac, Pa, Pb, Pc [2]Frac) (points [][2]Frac) {
+func getTexturePoints(step float64, Pa, Pb, Pc [2]float64) (points [][2]float64) {
 	// allocate slice capacity
-	lambdaRange := int(1 / step.Float())
-	points = make([][2]Frac, 0, lambdaRange*lambdaRange)
+	points = make([][2]float64, 0, int(1/step)*int(1/step))
 
-	var lambdaA, lambdaB, lambdaC Frac
+	var lambdaA, lambdaB, lambdaC float64
 
-	lambdaA = NewFrac(0, 1)
-	for lambdaA.Float() <= 1 {
-		lambdaB = NewFrac(0, 1)
-		for lambdaA.Add(lambdaB).Float() <= 1 {
-			lambdaC = NewFrac(1, 1).Sub(lambdaA).Sub(lambdaB)
-			x := Pa[0].Mul(lambdaA).Add(Pb[0].Mul(lambdaB)).Add(Pc[0].Mul(lambdaC))
-			y := Pa[1].Mul(lambdaA).Add(Pb[1].Mul(lambdaB)).Add(Pc[1].Mul(lambdaC))
+	for mulLambdaA := 0.0; mulLambdaA*step <= 1; mulLambdaA++ {
+		for mulLambdaB := 0.0; (mulLambdaA+mulLambdaB)*step <= 1; mulLambdaB++ {
+			lambdaA = mulLambdaA * step
+			lambdaB = mulLambdaB * step
+			lambdaC = 1.0 - lambdaA - lambdaB
+			x := Pa[0]*lambdaA + Pb[0]*lambdaB + Pc[0]*lambdaC
+			y := Pa[1]*lambdaA + Pb[1]*lambdaB + Pc[1]*lambdaC
 
-			points = append(points, [2]Frac{x, y})
-
-			lambdaB = lambdaB.Add(step)
+			points = append(points, [2]float64{x, y})
 		}
-		lambdaA = lambdaA.Add(step)
 	}
 
 	return
 }
 
-func weightedPoint3D(Pa, Pb, Pc [3]Frac, lambdaA, lambdaB, lambdaC Frac) (x, y, z Frac) {
-	x = Pa[0].Mul(lambdaA).Add(Pb[0].Mul(lambdaB)).Add(Pc[0].Mul(lambdaC))
-	y = Pa[1].Mul(lambdaA).Add(Pb[1].Mul(lambdaB)).Add(Pc[1].Mul(lambdaC))
-	z = Pa[2].Mul(lambdaA).Add(Pb[2].Mul(lambdaB)).Add(Pc[2].Mul(lambdaC))
+func weightedPoint3D(Pa, Pb, Pc [3]float64, lambdaA, lambdaB, lambdaC float64) (x, y, z float64) {
+	x = Pa[0]*lambdaA + Pb[0]*lambdaB + Pc[0]*lambdaC
+	y = Pa[1]*lambdaA + Pb[1]*lambdaB + Pc[1]*lambdaC
+	z = Pa[2]*lambdaA + Pb[2]*lambdaB + Pc[2]*lambdaC
 	return
 }
 
-func calcDistance(Xa, Ya, Za, Xb, Yb, Zb Frac) Frac {
-	Xab := Xa.Sub(Xb).Pow2()
-	Yab := Ya.Sub(Yb).Pow2()
-	Zab := Za.Sub(Zb).Pow2()
-	return Xab.Add(Yab).Add(Zab)
-}
-
-func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2]Frac, texture [][]Color) (step Frac, min [3]float64, max [3]float64, args []CommandArgument, usedBlock map[string]int) {
+func calcSurface(indexes []string, polygonVectors [][3]float64, textureVectors [][2]float64, texture [][]Color) (step float64, min [3]float64, max [3]float64, args []CommandArgument, usedBlock map[string]int) {
 	// Get surface polygon top
 	polygonPaIndex, _ := strconv.Atoi(strings.Split(indexes[0], "/")[0])
 	polygonPbIndex, _ := strconv.Atoi(strings.Split(indexes[1], "/")[0])
@@ -175,36 +90,24 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 	// Get min,max polygon top
 	for i := 0; i < 3; i++ {
 		// min
-		if min[i] > polygonPa[i].Float() {
-			min[i] = polygonPa[i].Float()
-		}
-		if min[i] > polygonPb[i].Float() {
-			min[i] = polygonPb[i].Float()
-		}
-		if min[i] > polygonPc[i].Float() {
-			min[i] = polygonPc[i].Float()
-		}
+		min[i] = math.Min(min[i], polygonPa[i])
+		min[i] = math.Min(min[i], polygonPb[i])
+		min[i] = math.Min(min[i], polygonPc[i])
 		// max
-		if max[i] < polygonPa[i].Float() {
-			max[i] = polygonPa[i].Float()
-		}
-		if max[i] < polygonPb[i].Float() {
-			max[i] = polygonPb[i].Float()
-		}
-		if max[i] < polygonPc[i].Float() {
-			max[i] = polygonPc[i].Float()
-		}
+		max[i] = math.Max(max[i], polygonPa[i])
+		max[i] = math.Max(max[i], polygonPb[i])
+		max[i] = math.Max(max[i], polygonPc[i])
 	}
 
 	step = getStep(polygonPa, polygonPb, polygonPc, objectGridSpacing)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	var polygonPoints [][3]Frac
+	var polygonPoints [][3]float64
 	go func() {
 		defer wg.Done()
 		polygonPoints = getPolygonPoints(step, polygonPa, polygonPb, polygonPc)
 	}()
-	var texturePoints [][2]Frac
+	var texturePoints [][2]float64
 	go func() {
 		defer wg.Done()
 		texturePoints = getTexturePoints(step, texturePa, texturePb, texturePc)
@@ -216,15 +119,15 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 
 	for i := 0; i < len(polygonPoints); i++ {
 		polygonPoint := polygonPoints[i]
-		x := math.Round(polygonPoint[0].Div(objectGridSpacing).Float()) * objectGridSpacing.Float()
+		x := math.Round(polygonPoint[0]/objectGridSpacing) * objectGridSpacing
 		if math.Abs(x) < threshold {
 			x = 0
 		}
-		y := math.Round(polygonPoint[1].Div(objectGridSpacing).Float()) * objectGridSpacing.Float()
+		y := math.Round(polygonPoint[1]/objectGridSpacing) * objectGridSpacing
 		if math.Abs(y) < threshold {
 			y = 0
 		}
-		z := math.Round(polygonPoint[2].Div(objectGridSpacing).Float()) * objectGridSpacing.Float()
+		z := math.Round(polygonPoint[2]/objectGridSpacing) * objectGridSpacing
 		if math.Abs(z) < threshold {
 			z = 0
 		}
@@ -237,14 +140,18 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 
 		texturePoint := texturePoints[i]
 		// -1..1 => -width..width
-		textureX := texturePoint[0].Mod(NewFrac(1, 1)).Float()
+		textureX := math.Mod(texturePoint[0], 1)
+		if textureX < 0 {
+			textureX = 1 + textureX
+		}
 		textureIndexX := int(textureX * float64(len(texture)))
 		// -1..1 => height..-height
-		var textureY float64
+		textureY := math.Mod(texturePoint[1], 1)
 		if isObjectUVYAxisUp {
-			textureY = 1 - texturePoint[1].Mod(NewFrac(1, 1)).Float()
-		} else {
-			textureY = texturePoint[1].Mod(NewFrac(1, 1)).Float()
+			textureY = 1 - textureY
+		}
+		if textureY < 0 {
+			textureY = 1 + textureY
 		}
 		textureIndexY := int(textureY * float64(len(texture[textureIndexX])))
 		texturePixel := texture[textureIndexX][textureIndexY]
@@ -259,8 +166,6 @@ func calcSurface(indexes []string, polygonVectors [][3]Frac, textureVectors [][2
 		})
 		usedBlock[blockId] = usedBlock[blockId] + 1
 	}
-
-	args = removeDupeArgument(args)
 
 	return
 }
