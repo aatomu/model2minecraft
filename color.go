@@ -1,9 +1,7 @@
 package main
 
 import (
-	"maps"
 	"math"
-	"slices"
 )
 
 func getBlock(target Color) (blockID string) {
@@ -14,16 +12,18 @@ func getBlock(target Color) (blockID string) {
 }
 
 func nearestColorBlock(target Color) (blockID string) {
-	blockList := maps.Keys(blockColor)
+	if id, ok := colorCache.Load(target); ok {
+		return id.(string)
+	}
 
 	var distance float64 = math.MaxFloat64
-	for _, id := range slices.Sorted(blockList) {
-		// // RGB
-		// d := RGBDistance(blockColor[id], target)
+	for _, id := range blockList {
+		// RGB
+		d := RGBDistance(blockColor[id], target)
 		// // HLS
 		// d := HSLDistance(blockColor[id], target)
-		// Lab
-		d := LabDistance(blockColor[id], target)
+		// // Lab
+		// d := LabDistance(blockColor[id], target)
 
 		if d < distance {
 			blockID = id
@@ -31,13 +31,17 @@ func nearestColorBlock(target Color) (blockID string) {
 		}
 	}
 
+	colorCache.Store(target, blockID)
 	return
 }
 
 func RGBDistance(a, b Color) float64 {
-	red := math.Pow(float64(a.r-b.r), 2)
-	green := math.Pow(float64(a.g-b.g), 2)
-	blue := math.Pow(float64(a.b-b.b), 2)
+	tmp := float64(a.r - b.r)
+	red := tmp * tmp
+	tmp = float64(a.g - b.g)
+	green := tmp * tmp
+	tmp = float64(a.b - b.b)
+	blue := tmp * tmp
 	return red + green + blue
 }
 
@@ -138,8 +142,8 @@ func LabDistance(a, b Color) float64 {
 	La, Aa, Ba := rgbToLab(a)
 	Lb, Ab, Bb := rgbToLab(b)
 
-	dL := math.Pow(La-Lb, 2)
-	dA := math.Pow(Aa-Ab, 2)
-	dB := math.Pow(Ba-Bb, 2)
+	dL := (La - Lb) * (La - Lb)
+	dA := (Aa - Ab) * (Aa - Ab)
+	dB := (Ba - Bb) * (Ba - Bb)
 	return dL + dA + dB
 }

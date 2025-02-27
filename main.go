@@ -21,7 +21,7 @@ var (
 	// Output Configuration
 	sourceType       Source  = Object
 	maxCommandChain  int     = 700000
-	colorDepthBit    int     = 4 // 1-8
+	colorDepthBit    int     = 8 // 1-8
 	commandGenerator Command = func(arg CommandArgument) (cmd string) {
 		return fmt.Sprintf("setblock ~%.2f ~%.2f ~%.2f %s", arg.x, arg.y, arg.z, arg.blockId)
 		// return fmt.Sprintf("particle dust{color:[%ff,%ff,%ff],scale:0.2f} ~%.2f ~%.2f ~%.2f 0 0 0 0 1 force @a", float64(rgb.r)/255, float64(rgb.g)/255, float64(rgb.b)/255, x, y, z)
@@ -29,12 +29,12 @@ var (
 	enableBlockCount bool = false
 
 	// Object Configuration
-	objectDirectory   string = "./3d"
-	objectFilename    string = "HatsuneMiku.obj"
-	objectScale       Frac   = NewFrac(9, 5)
-	objectGridSpacing Frac   = NewFrac(1, 1)
-	isObjectUVYAxisUp bool   = true
-	parallelLimit     int    = 500
+	objectDirectory   string  = "./3d"
+	objectFilename    string  = "HatsuneMiku.obj"
+	objectScale       float64 = 9.0 / 5.0
+	objectGridSpacing float64 = 1.0 / 1.0
+	isObjectUVYAxisUp bool    = true
+	parallelLimit     int     = 10
 
 	// Image Configuration
 	imageFilename string = "../develop/assets/cbw32.png"
@@ -131,12 +131,12 @@ func main() {
 		var material map[string][][]Color
 
 		// object/polygon
-		polygonVectors := [][3]Frac{}
+		polygonVectors := [][3]float64{}
 		var face int64 = 0
 		min := [3]float64{}
 		max := [3]float64{}
 		// texture/mtl
-		textureVectors := [][2]Frac{}
+		textureVectors := [][2]float64{}
 		currentTexture := ""
 		// command
 		args := []CommandArgument{}
@@ -159,14 +159,14 @@ func main() {
 				{
 					var x, y, z float64
 					fmt.Sscanf(data, "%f %f %f", &x, &y, &z)
-					polygonVectors = append(polygonVectors, [3]Frac{Float2Frac(x).Mul(objectScale), Float2Frac(y).Mul(objectScale), Float2Frac(z).Mul(objectScale)})
+					polygonVectors = append(polygonVectors, [3]float64{x * objectScale, y * objectScale, z * objectScale})
 					fmt.Printf("PolygonVector L%d: %s\n", ln, line)
 				}
 			case "vt": // Texture top
 				{
 					var x, y float64
 					fmt.Sscanf(data, "%f %f", &x, &y)
-					textureVectors = append(textureVectors, [2]Frac{Float2Frac(x), Float2Frac(y)})
+					textureVectors = append(textureVectors, [2]float64{x, y})
 					fmt.Printf("TextureVector L%d: %s\n", ln, line)
 				}
 			case "usemtl": // Set use material
@@ -186,7 +186,7 @@ func main() {
 					wg.Add(1)
 					wgTotalRoutine++
 					wgCurrentCount++
-					go func(fLn int, fData string, fIndexes []string, fPolygonVectors [][3]Frac, fTextureVectors [][2]Frac, fTexture [][]Color, fBlockColor map[string]Color, fObj_start time.Time) {
+					go func(fLn int, fData string, fIndexes []string, fPolygonVectors [][3]float64, fTextureVectors [][2]float64, fTexture [][]Color, fBlockColor map[string]Color, fObj_start time.Time) {
 
 						defer func() {
 							<-wgSession
@@ -197,7 +197,7 @@ func main() {
 						step, surfaceMin, surfaceMax, generatedArgs, usedBlocks := calcSurface(fIndexes, fPolygonVectors, fTextureVectors, fTexture)
 
 						prefix := fmt.Sprintf("Face L%d: f %s", fLn, fData)
-						fmt.Printf("% -60s Step:%f Now:%s Parallel(running/total):%d/%d\n", prefix, step.Float(), time.Since(fObj_start), wgCurrentCount, wgTotalRoutine)
+						fmt.Printf("% -60s Step:%f Now:%s Parallel(running/total):%d/%d\n", prefix, step, time.Since(fObj_start), wgCurrentCount, wgTotalRoutine)
 
 						mu.Lock()
 						min[0] = math.Min(min[0], surfaceMin[0])
@@ -390,7 +390,7 @@ func removeDupeArgument(in []CommandArgument) []CommandArgument {
 	tmp := make([]CommandArgument, len(in))
 	copy(tmp, in)
 
-	slices.SortStableFunc(tmp, func(a, b CommandArgument) int {
+	slices.SortFunc(tmp, func(a, b CommandArgument) int {
 		// sort by position
 		if cmp := floatCompare(a.x, b.x); cmp != 0 {
 			return cmp

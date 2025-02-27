@@ -7,9 +7,11 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -77,9 +79,6 @@ func scanBlockModel() (blockModelList map[string]BlockModel) {
 
 func blockFilter(blockModelList map[string]BlockModel) (blockColor map[string]Color) {
 	blockColor = map[string]Color{}
-
-	// modelDir := filepath.Join(minecraftDirectory, "models", "block")
-	// textureDir := filepath.Join(minecraftDirectory, "textures", "block")
 
 	type Model struct {
 		Parent   string            `json:"parent"`
@@ -149,6 +148,8 @@ func blockFilter(blockModelList map[string]BlockModel) (blockColor map[string]Co
 			b: uint8(blue / pixel),
 		}
 	}
+
+	blockList = slices.Sorted(maps.Keys(blockColor))
 
 	fmt.Printf("All sides are same& name filtered block: %d\n", len(blockColor))
 	return
