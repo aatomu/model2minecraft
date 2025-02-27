@@ -174,7 +174,7 @@ func CommandToMCfunction(args []CommandArgument, filePrefix string) (funcs []str
 	count = len(result)
 
 	funcs = []string{}
-	for i := 0; i <= (len(result)/maxCommandChain-1)/maxCommandChain; i++ {
+	for i := 0; i*maxCommandChain < len(result); i++ {
 		var builder strings.Builder
 		start := i * maxCommandChain
 		end := Min((i+1)*maxCommandChain, len(result))
